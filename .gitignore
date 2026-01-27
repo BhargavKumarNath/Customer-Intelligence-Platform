@@ -1,0 +1,101 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# LARGE DATA FILES (LOCAL ONLY)
+# Full database (5+ GB)
+data/db/
+data/db/**
+
+# Raw CSV files (12+ GB)
+data/raw/
+data/raw/**
+*.csv
+
+# Processed intermediate files
+data/processed/
+data/processed/**
+
+# Keep ONLY sample data for cloud (these ARE uploaded)
+!data/sample/
+!data/sample/*.duckdb
+!data/sample/*.parquet
+
+# Machine Learning Models (exclude large trained models)
+src/models/*.pkl
+src/models/*.joblib
+src/models/*.h5
+src/models/*.pth
+*.model
+
+# Generated Outputs and Logs
+logs/
+logs/**
+outputs/
+outputs/**
+analysis_subsets/
+analysis_subsets/**
+*.log
+
+# Python Cache and Bytecode
+__pycache__/
+__pycache__/**
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.ropeproject
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Local Configuration (secrets and local configs)
+.streamlit/secrets.toml
+config/config.local.yaml
+.env
+.env.local
+*.secret
+
+# Temporary Files 
+*.tmp
+.tmp/
+temp/
+*.bak
+*.swp
+
+# Git Files
+.git/
+.gitattributes

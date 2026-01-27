@@ -1,0 +1,8 @@
+database:
+  main_table: events
+  memory_limit: 8GB
+  read_only: false
+paths:
+  database: C:\Project\Customer Intelligence Platform\data\db\behavior.duckdb
+  processed: C:\Project\Customer Intelligence Platform\data\processed
+  raw_data: C:\Project\Customer Intelligence Platform\data\raw\ecommerce_optimized.parquet

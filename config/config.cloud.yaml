@@ -1,0 +1,13 @@
+database:
+  main_table: events
+  memory_limit: 512MB
+  read_only: true
+
+paths:
+  database: data/sample/sample.duckdb
+  processed: data/sample
+  raw_data: data/sample/sample_optimized.parquet
+
+environment: cloud
+sample_mode: true
+sample_percentage: 3.0
