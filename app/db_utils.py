@@ -134,14 +134,24 @@ def get_dataset_info():
         
         is_sample = is_sample_mode()
         
-        return {
-            'event_count': event_count,
-            'is_sample': is_sample,
-            'mode': 'Cloud Sample' if IS_CLOUD else ('Sample' if SAMPLE_MODE else 'Full Dataset')
-        }
-    except:
+        if is_sample:
+            return {
+                'event_count': event_count,
+                'is_sample': True,
+                'mode': 'Cloud Sample' if IS_CLOUD else 'Sample',
+                'notice': '🌐 Cloud Demo Mode - Using representative sample'
+            }
+        else:
+            return {
+                'event_count': event_count,
+                'is_sample': False,
+                'mode': 'Full Dataset',
+                'notice': '🖥️ Local Mode - Using complete dataset'
+            }
+    except Exception as e:
         return {
             'event_count': 0,
             'is_sample': True,
-            'mode': 'Unknown'
+            'mode': 'Unknown',
+            'notice': '⚠️ Database error'
         }
