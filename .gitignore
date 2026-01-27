@@ -23,8 +23,10 @@ data/processed/**
 
 # Keep ONLY sample data for cloud (these ARE uploaded)
 !data/sample/
-!data/sample/*.duckdb
 !data/sample/*.parquet
+
+# Exclude .duckdb files (not portable across Windows/Linux)
+data/sample/*.duckdb
 
 # Machine Learning Models (exclude large trained models)
 src/models/*.pkl
