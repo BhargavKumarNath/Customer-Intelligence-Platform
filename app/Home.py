@@ -28,7 +28,7 @@ if dataset_info['is_sample']:
 st.markdown(f"""
 ### Welcome to the Control Center
 
-This platform demonstrates an **End-to-End Data Science Pipeline** processing **{dataset_info['display_text']}** 
+This platform demonstrates an **End to End Data Science Pipeline** processing **{dataset_info['display_text']}** 
 showcasing optimization techniques, analytical rigor, and ML-driven insights typically found in FAANG companies.
 """)
 

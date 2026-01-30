@@ -12,8 +12,8 @@ st.title("🎯 Customer Intelligence Platform - Project Overview")
 
 # Hero Section
 st.markdown("""
-This platform demonstrates an **end-to-end production-grade data science pipeline** processing **109 Million e-commerce events** 
-on a **single 16GB RAM machine** showcasing optimization techniques, analytical rigor, and ML-driven insights typically 
+This platform demonstrates an **end to end production grade data science pipeline** processing **109 Million e-commerce events** 
+on a **single 16GB RAM machine** showcasing optimization techniques, analytical rigor, and ML insights typically 
 found in FAANG companies.
 """)
 
@@ -65,7 +65,7 @@ if dataset_info['is_sample']:
     **💡 You're viewing the Cloud Demo**
     
     This deployment uses a representative sample dataset to work within Streamlit Cloud constraints. 
-    All features, visualizations, and ML models work identically—just with a smaller dataset.
+    All features, visualizations, and ML models work identically just with a smaller dataset.
     """)
 
 col1, col2 = st.columns(2)
@@ -114,12 +114,12 @@ The platform follows a modern data science pipeline with optimization at every l
 **Data Provenance:**
 - **Original Dataset:** [Kaggle - eCommerce Behavior Data (2019-Oct/Nov)](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store)
 - **Size Challenge:** The full dataset is too large to process on a single 16GB RAM machine
-- **Preprocessing Strategy:** Clever sampling and optimization techniques applied in the [`summarise`](file:///c:/Project/Customer Intelligence Platform/summarise) folder reduce the dataset to a manageable size while preserving statistical properties
+- **Preprocessing Strategy:** Clever sampling and optimization techniques applied in the [`summarise`](https://github.com/BhargavKumarNath/Customer-Intelligence-Platform/tree/main/summarise) folder reduce the dataset to a manageable size while preserving statistical properties
 """)
 
 # Display the SVG diagram
 import os
-svg_path = "c:\\Project\\Customer Intelligence Platform\\system_design.svg"
+svg_path = "https://github.com/BhargavKumarNath/Customer-Intelligence-Platform/blob/main/system_design.svg"
 
 if os.path.exists(svg_path):
     st.image(svg_path, width='stretch', caption="End-to-End System Architecture")
@@ -347,8 +347,8 @@ st.dataframe(pd.DataFrame(pages_info), width='stretch', hide_index=True)
 
 st.markdown("---")
 
-# What Makes This FAANG-Grade
-st.header("🌟 What Makes This FAANG-Grade?")
+# What Makes This Industry-Grade
+st.header("🌟 What Makes This Industry-Grade?")
 
 col1, col2 = st.columns(2)
 
