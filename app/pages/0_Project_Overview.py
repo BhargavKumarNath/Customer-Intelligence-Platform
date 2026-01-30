@@ -119,7 +119,7 @@ The platform follows a modern data science pipeline with optimization at every l
 
 # Display the SVG diagram
 import os
-svg_path = "https://github.com/BhargavKumarNath/Customer-Intelligence-Platform/blob/main/system_design.svg"
+svg_path = "system_design.svg"
 
 if os.path.exists(svg_path):
     st.image(svg_path, width='stretch', caption="End-to-End System Architecture")
