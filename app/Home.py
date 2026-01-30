@@ -76,7 +76,7 @@ with col4:
 
 with col5:
     try:
-        users_stats = run_query("SELECT COUNT(*) as users, SUM(CASE WHEN is_buyer THEN 1 ELSE 0 END) as buyers FROM dim_users")
+        users_stats = run_query("SELECT COUNT(*) as users, SUM(CASE WHEN purchase_count > 0 THEN 1 ELSE 0 END) as buyers FROM dim_users")
         conversion_rate = users_stats['buyers'][0] / users_stats['users'][0] * 100
         st.metric(
             "Conversion Rate",

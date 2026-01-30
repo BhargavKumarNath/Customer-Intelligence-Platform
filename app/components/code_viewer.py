@@ -8,7 +8,7 @@ def show_code_reference(file_path: str, start_line: int = None, end_line: int = 
     Parameters:
     -----------
     file_path : str
-        Absolute path to the source file
+        Path to the source file (can be absolute or relative from project root)
     start_line : int, optional
         Starting line number (1-indexed)
     end_line : int, optional
@@ -18,6 +18,13 @@ def show_code_reference(file_path: str, start_line: int = None, end_line: int = 
     """
     try:
         path = Path(file_path)
+        
+        # If path is not absolute or doesn't exist, try resolving from project root
+        if not path.is_absolute() or not path.exists():
+            # Get project root (parent of app directory)
+            app_dir = Path(__file__).parent.parent
+            project_root = app_dir.parent
+            path = project_root / file_path
         
         with st.expander(f"🔍 View Source Code: {path.name}"):
             if description:
@@ -38,7 +45,7 @@ def show_code_reference(file_path: str, start_line: int = None, end_line: int = 
                 st.code(code_snippet, language='python', line_numbers=True)
                 st.caption(f"Full file: `{path.name}`")
             
-            # Add file reference link
+            # Add file reference link (show relative path)
             st.caption(f"📁 File: `{file_path}`")
             
     except FileNotFoundError:

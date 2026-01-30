@@ -377,8 +377,8 @@ try:
         AVG(event_count) as avg_events,
         PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY event_count) as median_events,
         MAX(event_count) as max_events,
-        SUM(CASE WHEN is_buyer THEN 1 ELSE 0 END) as buyers,
-        SUM(CASE WHEN is_buyer THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as conversion_rate
+        SUM(CASE WHEN purchase_count > 0 THEN 1 ELSE 0 END) as buyers,
+        SUM(CASE WHEN purchase_count > 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as conversion_rate
     FROM dim_users
     """
     user_stats = run_query(user_stats_query)

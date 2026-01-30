@@ -76,7 +76,7 @@ st.dataframe(optimization_df, width='stretch', hide_index=True)
 # Show code reference
 st.markdown("#### 🔍 Implementation Details")
 show_code_reference(
-    file_path="c:\\Project\\Customer Intelligence Platform\\summarise\\optimize_dataset.py",
+    file_path="summarise/optimize_dataset.py",
     start_line=24,
     end_line=51,
     description="Polars type casting and categorical encoding applied during preprocessing"
@@ -124,10 +124,10 @@ st.info("""
 """)
 
 show_code_reference(
-    file_path="c:\\Project\\Customer Intelligence Platform\\summarise\\optimize_dataset.py",
-    start_line=56,
-    end_line=62,
-    description="Parquet sink with ZSTD compression configuration"
+    file_path="summarise/optimize_dataset.py",
+    start_line=178,
+    end_line=195,
+    description="Parquet compression with ZSTD codec"
 )
 
 st.markdown("---")
@@ -173,10 +173,10 @@ with col2:
     st.dataframe(query_perf, width='stretch', hide_index=True)
 
 show_code_reference(
-    file_path="c:\\Project\\Customer Intelligence Platform\\src\\processing\\initial_modeling.py",
-    start_line=19,
-    end_line=23,
-    description="DuckDB memory and thread optimization settings"
+    file_path="src/processing/initial_modeling.py",
+    start_line=23,
+    end_line=37,
+    description="DuckDB initialization with memory limits and threading"
 )
 
 show_glossary("DuckDB")
@@ -202,7 +202,7 @@ st.markdown("""
 
 # Display dimensional modeling diagram
 import os
-dim_model_path = "c:\\Project\\Customer Intelligence Platform\\dimensional_modeling.svg"
+dim_model_path = "dimensional_modeling.svg"
 
 if os.path.exists(dim_model_path):
     st.image(dim_model_path, width='stretch', caption="Star Schema Architecture")
@@ -253,10 +253,10 @@ with st.expander("**Technique 1: DISTINCT ON instead of Window Functions**"):
     """)
     
     show_code_reference(
-        file_path="c:\\Project\\Customer Intelligence Platform\\src\\processing\\initial_modeling.py",
-        start_line=31,
-        end_line=41,
-        description="DISTINCT ON used for creating dim_products"
+        file_path="src/processing/initial_modeling.py",
+        start_line=53,
+        end_line=75,
+        description="Star schema creation for analytical queries"
     )
 
 with st.expander("**Technique 2: TEMP Tables for Multi-Step Aggregations**"):

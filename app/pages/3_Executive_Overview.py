@@ -35,8 +35,8 @@ st.markdown("---")
 df_kpi = run_query("""
     SELECT 
         SUM(daily_revenue) as total_rev,
-        SUM(total_purchases) as total_orders,
-        SUM(daily_revenue) / NULLIF(SUM(total_purchases), 0) as aov
+        SUM(purchases) as total_orders,
+        SUM(daily_revenue) / NULLIF(SUM(purchases), 0) as aov
     FROM fact_daily_kpis
 """)
 
@@ -77,13 +77,13 @@ with tab2:
 # 3. CONVERSION FUNNEL
 st.subheader("Conversion Funnel Health")
 
-# Fetch funnel data from our session analysis
+# Fetch funnel data from events aggregated by session
 df_funnel = run_query("""
     SELECT 
-        SUM(CAST(has_view AS INT)) as Views,
-        SUM(CAST(has_cart AS INT)) as Carts,
-        SUM(CAST(has_purchase AS INT)) as Purchases
-    FROM fact_sessions
+        COUNT(DISTINCT CASE WHEN event_type = 'view' THEN user_session END) as Views,
+        COUNT(DISTINCT CASE WHEN event_type = 'cart' THEN user_session END) as Carts,
+        COUNT(DISTINCT CASE WHEN event_type = 'purchase' THEN user_session END) as Purchases
+    FROM events
 """)
 
 # Prepare data for Plotly Funnel
