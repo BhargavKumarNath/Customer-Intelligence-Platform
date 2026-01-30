@@ -272,7 +272,7 @@ with st.expander("**Technique 2: TEMP Tables for Multi-Step Aggregations**"):
     """)
     
     show_code_reference(
-        file_path="c:\\Project\\Customer Intelligence Platform\\src\\analysis\\segmentation.py",
+        file_path="src/analysis/segmentation.py",
         start_line=30,
         end_line=42,
         description="TEMP table for RFM base metrics"
