@@ -26,7 +26,7 @@ def get_connection():
     # For cloud/sample mode, create database from parquet to avoid Windows/Linux compatibility
     if IS_CLOUD or SAMPLE_MODE:
         if not os.path.exists(PARQUET_PATH):
-            st.error(f"❌ Sample data not found at: {PARQUET_PATH}")
+            st.error(f"Sample data not found at: {PARQUET_PATH}")
             st.info("Please ensure sample_optimized.parquet is in the repository.")
             st.stop()
         
@@ -149,6 +149,56 @@ def get_connection():
                         ELSE 'Regular'
                     END as segment
                 FROM rfm_scores
+            """)
+            
+            # Create predictions_product_affinity (for ML Engine page)
+            # Market basket analysis - which products are purchased together
+            con.execute("""
+                CREATE TABLE predictions_product_affinity AS
+                WITH purchase_pairs AS (
+                    SELECT 
+                        e1.product_id as product_a,
+                        e2.product_id as product_b,
+                        e1.user_session
+                    FROM events e1
+                    JOIN events e2 
+                        ON e1.user_session = e2.user_session 
+                        AND e1.product_id < e2.product_id
+                    WHERE e1.event_type = 'purchase' 
+                        AND e2.event_type = 'purchase'
+                        AND e1.product_id IS NOT NULL 
+                        AND e2.product_id IS NOT NULL
+                ),
+                pair_stats AS (
+                    SELECT 
+                        product_a,
+                        product_b,
+                        COUNT(DISTINCT user_session) as pair_count
+                    FROM purchase_pairs
+                    GROUP BY product_a, product_b
+                    HAVING COUNT(DISTINCT user_session) >= 3
+                ),
+                product_support AS (
+                    SELECT 
+                        product_id,
+                        COUNT(DISTINCT user_session) as product_count
+                    FROM events
+                    WHERE event_type = 'purchase' AND product_id IS NOT NULL
+                    GROUP BY product_id
+                )
+                SELECT 
+                    ps.product_a,
+                    ps.product_b,
+                    ps.pair_count,
+                    CAST(ps.pair_count AS FLOAT) / NULLIF(pa.product_count, 0) as confidence,
+                    (CAST(ps.pair_count AS FLOAT) / NULLIF(pa.product_count, 0)) / 
+                        (CAST(pb.product_count AS FLOAT) / NULLIF((SELECT COUNT(DISTINCT user_session) FROM events WHERE event_type = 'purchase'), 0)) 
+                        as lift
+                FROM pair_stats ps
+                JOIN product_support pa ON ps.product_a = pa.product_id
+                JOIN product_support pb ON ps.product_b = pb.product_id
+                WHERE ps.pair_count >= 3
+                ORDER BY lift DESC
             """)
             
             return con
