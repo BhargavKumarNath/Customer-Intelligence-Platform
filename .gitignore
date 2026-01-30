@@ -102,4 +102,4 @@ temp/
 .git/
 .gitattributes
 
-.devcontainer/
+.devcontainer
