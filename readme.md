@@ -31,6 +31,30 @@ By employing advanced data engineering techniques like precise typification, dic
 
 ---
 
+## Advanced Data Science & Machine Learning Methodology
+
+Beyond data engineering, this repository demonstrates rigorous, production-grade statistical and machine learning methodologies to ensure models generalize to reality and drive measured business impact.
+
+### 1. Strict Temporal Cross-Validation (Out-of-Time Split)
+A common pitfall in e-commerce behavioral modeling is random *K-fold split* data leakage, which artificially inflates model performance by blending future behaviors into training datasets. 
+This project circumvents leakage by employing a **strict temporal out-of-time (OOT) validation framework** (`src/models/train_propensity.py`):
+- **Feature Space**: Constructed exclusively using historic October session behaviors, aggregation ratios, and RFM flags.
+- **Target Variable**: Explicit purchase conversion events measured strictly within the chronological November window.
+- **Result**: The LightGBM Gradient Boosting model's 75% ROC-AUC and 4.5x Top-5% Conversion Lift represent an authentic, deployable baseline.
+
+### 2. Statistical Experimentation Engine
+To transition insights from correlation to measurable business value, a programmatic A/B testing simulation engine was built (`src/analysis/ab_testing.py`) using `scipy.stats` and `statsmodels`:
+- **Rigorous Hypothesis Testing**: Calculates precise statistical metrics using Welch's t-test (accounting for unequal variances) rather than naive averages.
+- **Delta Method Approximations**: Computes true 95% Confidence Intervals (CI) for conversion lifts.
+- **Power Analysis**: Integrates post-hoc deterministic Power Analysis to ensure simulated cohort sizes (e.g., the "Can't Lose Them" rescue segment) possess the statistical power (1-β = 0.80) necessary to detect the True Minimum Detectable Effect (MDE).
+
+### 3. Scalable Market Basket Analysis (Pure-SQL)
+Rather than loading millions of cart interactions into memory-heavy Python graphs like `mlxtend` or `NetworkX`, the recommendation framework (`src/models/recommendations.py`) performs Association Rule Mining entirely within the OLAP layer.
+- Through complex vectorized SQL window functions and self-joins, DuckDB calculates Product Support, Co-occurrence Matrices, exact Conditional Probability (Confidence), and associative Lift natively on disk.
+- Enables computing intricate item-affinity mappings over 4.5M purchase events instantaneously without breaching the 16GB memory ceiling.
+
+---
+
 ## System Architecture & Data Pipeline
 
 The system is built on an OLAP-first, meticulously optimized in-memory processing architecture that guarantees extreme performance on consumer-grade hardware.
