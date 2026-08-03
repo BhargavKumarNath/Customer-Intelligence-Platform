@@ -1,4 +1,4 @@
-# Customer Intelligence Platform
+﻿# Customer Intelligence Platform
 ## From 109M Events to Actionable Business Insights
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
@@ -6,7 +6,7 @@
 [![Polars](https://img.shields.io/badge/Polars-0.20.10-orange)](https://www.pola.rs/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32.0-red)](https://streamlit.io/)
 
-> **An end to end analytical data platform processing 109M e-commerce events on commodity hardware (16GB RAM laptop), unlocking high-value customer segments, predicting purchase probability, and identifying multi-million dollar revenue opportunities.**
+> **An end-to-end analytics platform that processes 109M e-commerce events on a 16GB RAM laptop, no cloud warehouse required. It surfaces high-value customer segments, scores purchase propensity, and quantifies revenue opportunities.**
 
 ---
 
@@ -14,89 +14,90 @@
 
 ## Project Overview
 
-The Customer Intelligence Platform bridges the gap between raw behavioral data and actionable business strategy, proving that sophisticated analytics and machine learning do not require expensive cloud infrastructure. 
+The Customer Intelligence Platform takes raw behavioural event logs and turns them into something a business can actually act on. The main constraint I set for myself: everything had to run on a standard laptop, not a cloud cluster.
 
-By employing advanced data engineering techniques like precise typification, dictionary encoding, columnar storage, and dimensional modeling, this repository processes a massive scale of e-commerce interactions natively. The project delivers an interactive application offering executive KPIs, deep dive user segmentations (RFM), LightGBM-based purchase propensity models, and statistical A/B test simulations.
+That required careful data engineering - aggressive type-casting, dictionary encoding for high-cardinality strings, columnar storage, and a proper star-schema model sitting on top of DuckDB. The result is a Streamlit app with executive KPIs, RFM segmentation, a LightGBM purchase propensity model, and a statistical A/B test simulator.
 
 ## Problem Statement
 
-**Business Challenge**: E-commerce platforms generate massive volumes of event data but struggle to answer strategic questions proactively:
+**Business challenge**: E-commerce platforms generate huge volumes of event data but rarely have the tooling to answer strategic questions quickly:
 - *Which users are showing churn signals?*
-- *Who possesses the highest probability to purchase next month?*
-- *Which products should be bundled together to maximize Average Order Value (AOV)?*
+- *Who is most likely to purchase next month?*
+- *Which products are commonly bought together, and what does that mean for AOV?*
 
-**Technical Challenge**: Processing 100M+ row event datasets typically necessitates expensive cloud data warehouses (e.g., Snowflake, BigQuery) or distributed compute clusters (e.g., Apache Spark), increasing operational overhead and slowing iteration speed.
+**Technical challenge**: At 100M+ rows, most teams reach for Snowflake, BigQuery, or Spark. Those are valid choices, but they add cost and operational overhead that slow down early-stage analysis.
 
-**Solution**: This platform demonstrates how **advanced optimization and modern OLAP engines (DuckDB + Polars)** allow complex, large-scale data workflows to execute entirely on commodity hardware.
+**Approach**: Modern OLAP engines (DuckDB + Polars) are surprisingly capable on a single machine. This project is a demonstration of how far you can get before you actually need distributed compute.
 
 ---
 
-## Advanced Data Science & Machine Learning Methodology
+## Data Science & ML Methodology
 
-Beyond data engineering, this repository demonstrates rigorous, production-grade statistical and machine learning methodologies to ensure models generalize to reality and drive measured business impact.
+### 1. Out-of-Time Validation Split
 
-### 1. Strict Temporal Cross-Validation (Out-of-Time Split)
-A common pitfall in e-commerce behavioral modeling is random *K-fold split* data leakage, which artificially inflates model performance by blending future behaviors into training datasets. 
-This project circumvents leakage by employing a **strict temporal out-of-time (OOT) validation framework** (`src/models/train_propensity.py`):
-- **Feature Space**: Constructed exclusively using historic October session behaviors, aggregation ratios, and RFM flags.
-- **Target Variable**: Explicit purchase conversion events measured strictly within the chronological November window.
-- **Result**: The LightGBM Gradient Boosting model's 75% ROC-AUC and 4.5x Top-5% Conversion Lift represent an authentic, deployable baseline.
+The biggest trap in e-commerce behavioural modelling is leaking future events into training data via random K-fold splits. If a user purchased in November and some of their November sessions end up in the training fold, the model learns the wrong thing.
 
-### 2. Statistical Experimentation Engine
-To transition insights from correlation to measurable business value, a programmatic A/B testing simulation engine was built (`src/analysis/ab_testing.py`) using `scipy.stats` and `statsmodels`:
-- **Rigorous Hypothesis Testing**: Calculates precise statistical metrics using Welch's t-test (accounting for unequal variances) rather than naive averages.
-- **Delta Method Approximations**: Computes true 95% Confidence Intervals (CI) for conversion lifts.
-- **Power Analysis**: Integrates post-hoc deterministic Power Analysis to ensure simulated cohort sizes (e.g., the "Can't Lose Them" rescue segment) possess the statistical power (1-β = 0.80) necessary to detect the True Minimum Detectable Effect (MDE).
+To avoid this, the propensity model (`src/models/train_propensity.py`) uses a strict temporal split:
+- **Features**: Built entirely from October session behaviour — aggregation ratios, RFM flags, checkout density, etc.
+- **Target**: Whether the user made a purchase in November.
+- **Result**: The 75% ROC-AUC and 4.5x top-5% conversion lift reflect genuine out-of-sample performance, not an artefact of the validation methodology.
 
-### 3. Scalable Market Basket Analysis (Pure-SQL)
-Rather than loading millions of cart interactions into memory-heavy Python graphs like `mlxtend` or `NetworkX`, the recommendation framework (`src/models/recommendations.py`) performs Association Rule Mining entirely within the OLAP layer.
-- Through complex vectorized SQL window functions and self-joins, DuckDB calculates Product Support, Co-occurrence Matrices, exact Conditional Probability (Confidence), and associative Lift natively on disk.
-- Enables computing intricate item-affinity mappings over 4.5M purchase events instantaneously without breaching the 16GB memory ceiling.
+### 2. A/B Test Simulation Engine
+
+Correlation is easy to find; knowing whether a segment is worth targeting takes a bit more care. The A/B testing module (`src/analysis/ab_testing.py`) handles:
+- **Welch's t-test** (accounts for unequal variances between cohorts, unlike a simple means comparison)
+- **Delta method** for 95% confidence intervals on conversion lifts
+- **Post-hoc power analysis** to check whether a given cohort size is large enough to reliably detect the minimum effect size you care about
+
+### 3. Market Basket Analysis in Pure SQL
+
+Rather than loading millions of cart events into a Python graph library, association rule mining runs entirely inside DuckDB (`src/models/recommendations.py`). Window functions and self-joins handle product support, co-occurrence counts, confidence, and lift — all on disk. This keeps memory usage flat even across 4.5M purchase events.
 
 ---
 
 ## System Architecture & Data Pipeline
 
-The system is built on an OLAP-first, meticulously optimized in-memory processing architecture that guarantees extreme performance on consumer-grade hardware.
+![System design diagram](system_design.svg)
 
-![Alt text](system_design.svg)
+### 1. Ingestion & Memory Optimisation
 
-### 1. Ingestion & Memory Optimization Layer
-- **Raw Data Ingestion**: The pipeline originates with a 12GB CSV comprising 109M distinct behavioral events recorded between Oct-Nov 2019.
-- **Transformation Engine** (`summarise/optimize_dataset.py`):
-    - **Polars Streaming**: Leverages lazy evaluation strategies (`pl.scan_parquet()`) to ingest and process data sequentially in bounded chunks, definitively neutralizing Out-of-Memory (OOM) risks commonly encountered on local setups.
-    - **Resource Compaction**: Orchestrates deep data typification logic (`Int64` → `Int32`) coupled with stringent categorical dictionary encoding strategies (UUID strings → integer-keyed maps), reducing the operational memory footprint by an unprecedented **97%**.
-    - **Storage Serialization**: Compiles localized optimized states as highly compressed Parquet blobs leveraging ZSTD level 3 compression, truncating massive 14.7GB raw file allocations to an optimal **1.9GB** footprint on-disk.
+- **Raw input**: 12GB CSV, 109M rows, covering Oct–Nov 2019.
+- **Optimisation script** (`summarise/optimize_dataset.py`):
+    - Uses Polars lazy evaluation (`pl.scan_parquet()`) to process data in streaming chunks rather than loading everything at once — this is what makes it viable on 16GB RAM.
+    - Downcasts numeric types (`Int64` -> `Int32` where safe) and replaces high-cardinality UUID strings with integer-keyed dictionaries. A naive Pandas `read_csv()` on this data requires ~120GB of RAM; after type optimisation the in-memory footprint is ~3.7GB — a **97% reduction**.
+    - Writes to Parquet with ZSTD level-3 compression: the 14.7GB raw CSV shrinks to **1.9GB on disk** (87% disk reduction), and reads back ~30x faster than CSV.
 
-### 2. Dimensional Modeling & OLAP Layer
-- **Analytical Setup** (`scripts/create_cloud_database.py`):
-    - Deploys a dedicated **DuckDB** instance functioning as a highly performant, in-memory analytical OLAP processing engine configured for sub-second aggregations spanning 100M+ elements.
-    - Transitions optimized Parquet representations immediately into a scalable Star Schema matrix, segregating compute logic into distributed Fact Tables (`fact_sessions`, `fact_daily_kpis`) and static Dimension subsets (`dim_users`, `dim_products`).
+### 2. Dimensional Modelling & OLAP Layer
 
-### 3. Feature Engineering & ML Layer
-- **Feature Store Operations** (`src/processing/features.py`):
-    - Synthesizes session events and dimensional properties uniformly via pure SQL processing, merging behavioral interaction metrics (e.g., checkout density, duration volatility) alongside discrete RFM flags to cultivate a rich `features_users` store.
-- **Predictive Modeling Algorithms** (`src/models/train_propensity.py`):
-    - Actuates an advanced **LightGBM Gradient Boosting** orchestration, explicitly trained strictly against October's behavioral datasets to infer November purchase probabilities. Operates enforcing an absolute out-of-time temporal barrier split to inherently negate target leakage logic.
-    - Reaches verification states exceeding **75% ROC-AUC**, successfully partitioning top-tier users to drive a validated **4.5x predictive conversion lift**.
-- **Calculated Intelligence** (`src/models/recommendations.py`):
-    - Facilitates embedded Market Basket Analysis directly through DuckDB's vectorized processing algorithms, successfully surfacing mathematically stable `predictions_product_affinity` cross-selling associations.
+- **Database setup** (`scripts/create_cloud_database.py`):
+    - Spins up a DuckDB instance configured for sub-second aggregations over 100M+ rows.
+    - Structures data as a star schema: fact tables (`fact_sessions`, `fact_daily_kpis`) referencing dimension tables (`dim_users`, `dim_products`).
+
+### 3. Feature Engineering & ML
+
+- **Feature store** (`src/processing/features.py`):
+    - Builds user-level features in SQL — session aggregates, checkout density, duration variance, RFM flags — all materialised into a `features_users` table.
+- **Propensity model** (`src/models/train_propensity.py`):
+    - Trains a LightGBM classifier on October features with November purchases as the target label. The strict out-of-time split (described above) prevents any future data from leaking into training.
+    - Achieves **75% ROC-AUC** on the held-out November period; the top 5% of scored users convert at **4.5x the baseline rate**.
+- **Recommendations** (`src/models/recommendations.py`):
+    - Runs market basket analysis through DuckDB to produce a `predictions_product_affinity` table of cross-sell candidates.
 
 ---
 
-## Executive Summary & Business Impact
+## Results & Business Impact
 
-Through programmatic analysis over 5.3M users, 15M sessions, and 206K products, the platform surfaced high-converting strategies:
+Analysis across 5.3M users, 15M sessions, and 206K products:
 
-| Discovery | Impact | Recommendation |
-|-----------|--------|----------------|
-| **High-Intent Prediction** | ML model flags users exhibiting **36% purchase probability** (4.5x baseline). | Deploy targeted personalized campaigns for the highest 5% of users → **+350% marketing efficiency**. |
-| **At-Risk VIPs** | Discovered 36,000 top-decile users ($890 avg spend) displaying actionable churn signals. | Automate "Can't Lose Them" reactivation pipelines → Recovers an estimated **$32M in lifetime value**. |
-| **High-Confidence Cross-Sells** | Identified 10M+ product affinity associations displaying >1.2 lift confidence. | Implement dynamically-injected "Frequently Bought Together" modules → Drives evaluated **+15% AOV**. |
+| Finding | Numbers | What to do with it |
+|---|---|---|
+| **High-intent users are identifiable** | Top 5% of ML-scored users show a 36% purchase probability — **4.5x the population average**. | Run targeted campaigns against this cohort rather than the full list. |
+| **At-risk VIPs** | ~36,000 top-decile users ($890 avg spend) showing churn signals. | This segment is small enough for a personalised reactivation flow — the spend data makes them worth prioritising. |
+| **Product affinities are strong** | 10M+ product pairs with lift > 1.2 across 4.5M purchase events. | "Frequently bought together" recommendations have a real signal to work from. |
 
-### Insights Highlights:
-- **The Recency Trap**: Users who browsed within 24 hours are **6x more likely** to purchase than equivalent 30-day cohorts. Real-time behavior triggers drastically outperform cumulative historical behavior.
-- **World-Class Checkout Success**: Discovered industry-leading 60.6% cart-to-purchase conversion workflows, isolating the business bottleneck cleanly up-funnel to discovery workflows (10.1% view-to-cart).
+### A couple of interesting findings:
+- **Recency dominates history**: Users who browsed within the last 24 hours are **6x more likely** to purchase than those last seen 30 days ago. If you're scoring users for a campaign, recency should carry heavy weight.
+- **The funnel break is up top**: Cart-to-purchase is 60.6%, which is solid. The problem is view-to-cart at 10.1% - that's where sessions are dropping off.
 
 ---
 
@@ -104,31 +105,31 @@ Through programmatic analysis over 5.3M users, 15M sessions, and 206K products, 
 
 ```text
 customer-intelligence-platform/
-├── app/                  # Streamlit application UI (7 interactive pages)
-│   ├── components/       # Reusable UI components and state machines
-│   └── pages/            # View logic for Data Explorer, ML Engine, etc.
-├── config/               # Environment and build YAML configurations 
-├── data/                 # Raw/Sample Parquet and DuckDB artifacts (Not checked in)
-├── scripts/              # Data generation and localized build utilities
+├── app/                  # Streamlit application (7 pages)
+│   ├── components/       # Shared UI components
+│   └── pages/            # Page logic: Data Explorer, ML Engine, etc.
+├── config/               # YAML configuration files
+├── data/                 # Parquet files and DuckDB database (not checked in)
+├── scripts/              # One-off build scripts
 │   ├── create_cloud_database.py
 │   └── create_sample_dataset.py
-├── src/                  # Core analytics and ML pipeline modules
-│   ├── analysis/         # RFM, cohort retention, and A/B statistical logic
-│   ├── ingestion/        # Data loading orchestration and schema validation
-│   ├── models/           # Propensity model training, inference, and recommendation
-│   ├── processing/       # Sessionization and complex feature engineering 
-│   └── utils/            # Helper utilities and shared context functions
-├── summarise/            # Heavily-optimized ETL pipelines compressing the raw dataset
-├── tests/                # Unit and integration test suites
-├── requirements.txt      # Python dependencies targeting cloud deployments
-└── readme.md             # Architecture documentation (This file)
+├── src/                  # Core analytics and ML modules
+│   ├── analysis/         # RFM, cohort retention, A/B testing
+│   ├── ingestion/        # Data loading and schema validation
+│   ├── models/           # Propensity model, recommendations
+│   ├── processing/       # Sessionisation, feature engineering
+│   └── utils/            # Shared helpers
+├── summarise/            # ETL scripts for compressing the raw dataset
+├── tests/                # Unit and integration tests
+├── requirements.txt      # Python dependencies
+└── readme.md             # This file
 ```
 
 ---
 
 ## Installation & Setup
 
-You can deploy the application using an automated sample dataset setup (ideal for rapid exploration or Cloud bounds) or optimize the full 109M event dataset locally. Note: The Kaggle _Multi-Category E-commerce Events_ dataset represents the full data source.
+You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset.
 
 ### 1. Environment Setup
 
@@ -140,60 +141,97 @@ cd Customer-Intelligence-Platform
 # Create and activate virtual environment
 python -m venv .venv
 
-# On Linux/MacOS
+# On Linux/macOS
 source .venv/bin/activate
 # On Windows
 .venv\Scripts\activate
 
-# Install core dependencies
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Data Pipeline Execution
+### 2. Data Pipeline
 
-**Option A: Running the Sample Dataset Workflow (Recommended)**
-Generates a representative, stratified sample database optimized for Streamlit Cloud constraints.
+**Option A: Sample dataset (recommended for exploration)**
+
+Builds a stratified sample that fits within Streamlit Cloud memory limits.
 ```bash
-# 1. Start by building the optimized sample Parquet
+# 1. Generate the sample Parquet
 python scripts/create_sample_dataset.py
 
-# 2. Compile the DuckDB dimensional models & RFM segments 
+# 2. Build the DuckDB database, dimensional models, and RFM segments
 python scripts/create_cloud_database.py
 ```
 
-**Option B: Full Dataset Optimization**
-Ensure you have the full 12GB CSV downloaded and placed appropriately inside `/data/`.
+**Option B: Full dataset**
+
+Download the 12GB CSV from Kaggle and place it in `/data/raw/` first.
 ```bash
-# Execute the massive memory reduction pipeline
+# Run the memory-optimisation pipeline
 python summarise/optimize_dataset.py
 ```
 
-### 3. Launching the Control Center Dashboard
+### Rebuilding from Scratch
 
-Spin up the 7-page interactive Streamlit dashboard locally:
+The large data files (~22GB total) are not checked into Git — they're all reproducible from the public Kaggle source. Here's the full rebuild sequence:
+
+**Files you'll need to regenerate:**
+
+| File | Size | How |
+|------|------|-----|
+| `data/raw/2019-Oct.csv`, `data/raw/2019-Nov.csv` | ~14 GB | Kaggle download |
+| `data/raw/2019-Oct-Nov.parquet` | ~1.8 GB | `summarise/combine_csv_to_parquet.py` |
+| `data/raw/ecommerce_optimized.parquet` | ~1.8 GB | `summarise/optimize_dataset.py` |
+| `data/db/behavior.duckdb` | ~5.2 GB | `src/ingestion/loader.py` |
+
+```bash
+# 1. Download raw CSVs from Kaggle ("Multi-Category E-commerce Events")
+#    Place 2019-Oct.csv and 2019-Nov.csv in data/raw/
+
+# 2. Merge the two months into a single Parquet
+python summarise/combine_csv_to_parquet.py \
+    data/raw/2019-Oct.csv \
+    data/raw/2019-Nov.csv \
+    data/raw/2019-Oct-Nov.parquet
+
+# 3. Run the memory-optimisation pass (ZSTD compression + type-casting).
+#    Note: optimize_dataset.py has hard-coded input/output paths at the bottom
+#    of the file. Update them to data/raw/2019-Oct-Nov.parquet ->
+#    data/raw/ecommerce_optimized.parquet before running.
+python summarise/optimize_dataset.py
+
+# 4. Build the full DuckDB database
+#    (reads config/config.yaml for input/output paths)
+python src/ingestion/loader.py
+```
+
+> The dimensional model, feature store, and ML prediction tables are materialised by the `src/processing/` and `src/models/` pipeline. For the cloud-ready sample, use Option A above.
+
+### 3. Running the Dashboard
+
 ```bash
 streamlit run app/Home.py
 ```
 
 ---
 
-## Key Technologies
+## Tech Stack
 
-- **Data Engineering**: [DuckDB](https://duckdb.org/) (In-process analytical SQL OLAP), [Polars](https://pola.rs/) (Lightning-fast DataFrame library in Rust), [Apache Arrow/Parquet](https://arrow.apache.org/) (Columnar memory & storage serialization)
-- **Machine Learning**: [LightGBM](https://lightgbm.readthedocs.io/) (Gradient Boosting tree framework optimized for speed), Scikit-Learn
-- **Dashboard & Visualization**: [Streamlit](https://streamlit.io/), [Plotly](https://plotly.com/)
-- **Architecture**: Dimensional Modeling (Star Schema), Config-driven development
-
----
-
-## Limitations & Future Improvements
-
-1. **Causal Inference**: Planning to integrate `DoWhy` and `EconML` to measure and prove true *incrementality* instead of mere correlation during simulated campaign interventions.
-2. **Graph Algorithms**: Initiating migration of the monolithic recommendation engine towards `Neo4j` to leverage complex relational graph traversal (e.g., PageRank, Node2vec).
-3. **Real-Time Streaming Ingestion**: Designing infrastructure integration linking `Kafka` and DuckDB for live, intra-day streaming event ingestion and real-time model scoring.
+- **Data engineering**: [DuckDB](https://duckdb.org/) (in-process OLAP SQL), [Polars](https://pola.rs/) (Rust-based DataFrame library), [Apache Parquet](https://arrow.apache.org/) (columnar storage)
+- **Machine learning**: [LightGBM](https://lightgbm.readthedocs.io/), scikit-learn
+- **Dashboard**: [Streamlit](https://streamlit.io/), [Plotly](https://plotly.com/)
+- **Architecture**: Star schema dimensional model, config-driven pipeline
 
 ---
 
-**If this system architecture or optimization approach helps your data engineering journey, please consider starring the repository!**
+## Limitations & What's Next
 
-*Questions or collaborations? Open an issue or reach out via [LinkedIn](https://www.linkedin.com/in/bhargavkumarnath/).*
+1. **Causal inference**: The current A/B simulation assumes correlation implies causation. Integrating `DoWhy` or `EconML` would let you estimate true incrementality from the intervention.
+2. **Graph-based recommendations**: The SQL approach works well for pairwise affinities, but moving to `Neo4j` would unlock multi-hop relationships (PageRank, Node2Vec embeddings).
+3. **Real-time scoring**: The pipeline is currently batch-only. Connecting Kafka to DuckDB for intra-day event streaming and live model scoring is a natural next step.
+
+---
+
+**If this helped with your data engineering work, a star on the repo goes a long way!**
+
+*Questions or collaborations? Open an issue or reach out on [LinkedIn](https://www.linkedin.com/in/bhargavkumarnath/).*
