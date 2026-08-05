@@ -10,6 +10,12 @@ client = TestClient(app)
 _UNKNOWN_ID = 999_999_999
 
 
+def test_root_redirects_to_docs() -> None:
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+
+
 def test_healthz() -> None:
     response = client.get("/healthz")
     assert response.status_code == 200

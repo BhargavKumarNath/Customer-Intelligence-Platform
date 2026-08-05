@@ -48,53 +48,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-huggingface:
+  deploy-render:
     runs-on: ubuntu-latest
     needs: build-and-push-ghcr
-    # Skipped until the one-time HF Space setup is done - see docs/DEPLOYMENT.md.
-    if: ${{ vars.HF_USERNAME != '' && vars.HF_SPACE_NAME != '' }}
+    # Skipped until the one-time Render setup is done - see docs/DEPLOYMENT.md.
+    # Render auto-builds straight from this repo's Dockerfile once connected; this
+    # step just calls its Deploy Hook so the deploy only fires after CI/build succeed,
+    # instead of on every raw push regardless of test status.
+    if: ${{ vars.RENDER_DEPLOY_HOOK_URL != '' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Stage a minimal Hugging Face Space deploy tree
-        run: |
-          set -eu
-          rm -rf /tmp/hf-space
-          mkdir -p /tmp/hf-space/scripts /tmp/hf-space/data/sample
-          cp Dockerfile pyproject.toml /tmp/hf-space/
-          cp -r api /tmp/hf-space/api
-          cp -r src /tmp/hf-space/src
-          cp scripts/create_cloud_database.py /tmp/hf-space/scripts/
-          cp data/sample/sample_optimized.parquet /tmp/hf-space/data/sample/
-          cat > /tmp/hf-space/README.md <<EOF
-          ---
-          title: Customer Intelligence Platform API
-          emoji: 📊
-          colorFrom: blue
-          colorTo: indigo
-          sdk: docker
-          app_port: 8000
-          pinned: false
-          ---
-
-          Typed FastAPI service over precomputed RFM segments, LightGBM
-          propensity scores, market-basket recommendations, and an A/B test
-          simulator. Source: https://github.com/${{ github.repository }}
-          EOF
-
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: ${{ vars.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ vars.HF_SPACE_NAME }}
-        working-directory: /tmp/hf-space
-        run: |
-          set -eu
-          git init -q
-          git config user.email "actions@github.com"
-          git config user.name "github-actions"
-          git checkout -q -b main
-          git add -A
-          git commit -q -m "Deploy from ${{ github.repository }}@${{ github.sha }}"
-          git remote add space "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}"
-          git push --force space main
+      - name: Trigger Render deploy
+        run: curl -fsS -X POST "${{ vars.RENDER_DEPLOY_HOOK_URL }}"

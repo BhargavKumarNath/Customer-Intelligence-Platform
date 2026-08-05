@@ -72,6 +72,9 @@ htmlcov/
 .vscode/
 .idea/
 .claude/
+
+# Local-only docs (deployment/setup notes, kept out of the public repo)
+docs/
 *.swp
 *.swo
 *~
@@ -109,3 +112,4 @@ temp/
 
 .devcontainer
 interview/
+docs/
