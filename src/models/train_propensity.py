@@ -106,7 +106,6 @@ def train_propensity_model(cfg: DictConfig):
             'num_leaves': 31,
             'learning_rate': 0.05,
             'feature_fraction': 0.9,
-            'device': 'gpu',
         }
         
         # Train with early stopping

@@ -361,3 +361,63 @@ After successful deployment:
 ---
 
 **Congratulations! Your Customer Intelligence Platform is now live! 🚀**
+
+---
+
+# FastAPI Service Deployment (Hugging Face Spaces)
+
+This section covers the separate, independent `api/` service (typed endpoints over
+RFM segments, propensity scoring, recommendations, and the A/B test simulator - see
+`Dockerfile`, `.github/workflows/ci.yml`, `.github/workflows/cd.yml`). It does not
+affect the Streamlit dashboard above, which keeps deploying to Streamlit Cloud
+unchanged.
+
+## Why Hugging Face Spaces
+
+Free, requires no credit card, and gives 2 vCPU / 16GB RAM on the free CPU tier -
+comfortably fits DuckDB + pandas + LightGBM. The Space sleeps after 48h of
+inactivity and wakes on the next request in a few seconds.
+
+## One-time setup
+
+1. **Create the Space**: on [huggingface.co/new-space](https://huggingface.co/new-space),
+   pick SDK **Docker**, visibility **Public**, and note the owner (your HF
+   username) and Space name.
+2. **Create an access token**: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens),
+   scope **Write**.
+3. **Configure this GitHub repo** (Settings → Secrets and variables → Actions):
+   - Secret `HF_TOKEN` = the token from step 2.
+   - Variable `HF_USERNAME` = your Hugging Face username.
+   - Variable `HF_SPACE_NAME` = the Space name from step 1.
+
+Once all three are set, `cd.yml`'s `deploy-huggingface` job (currently a no-op
+via its `if:` guard) starts running on every push to `main`: it builds and pushes
+a versioned image to GHCR, stages a minimal deploy tree (`Dockerfile`, `api/`,
+`src/`, `scripts/create_cloud_database.py`, `data/sample/sample_optimized.parquet`,
+plus a generated `README.md` carrying the Space's required Docker-SDK
+frontmatter), and force-pushes it to the Space's own git remote, which triggers
+HF's build.
+
+## Why a generated `README.md`
+
+Hugging Face Spaces detects the SDK from YAML frontmatter in `README.md` at the
+Space repo root. This project's own root `readme.md` is the GitHub portfolio
+README and can't carry Space-specific frontmatter, so the deploy step generates
+a dedicated one inside the staged deploy tree - it never touches the repo's real
+README or git history.
+
+## Verifying a deploy
+
+```bash
+curl https://<hf-username>-<space-name>.hf.space/healthz
+curl https://<hf-username>-<space-name>.hf.space/ready
+curl https://<hf-username>-<space-name>.hf.space/docs   # OpenAPI UI
+```
+
+## Known limitations
+
+- Single instance, no autoscaling - fine for demo-scale traffic, not for sustained load.
+- First request after 48h of inactivity pays a cold-start (container wake) delay.
+- `data/sample/sample.duckdb` is rebuilt at image-build time from the tracked
+  `sample_optimized.parquet` (see `scripts/create_cloud_database.py`) - it's a
+  derived artifact and isn't committed to git.

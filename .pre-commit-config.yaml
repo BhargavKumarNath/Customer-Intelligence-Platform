@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.7
+          - pydantic-settings>=2.3
+          - pandas-stubs
+        args: [src/config.py, src/db.py, src/domain, src/services, src/analysis/ab_testing.py, api]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (excluding slow)
+        entry: pytest -m "not slow" -q
+        language: system
+        pass_filenames: false
+        types: [python]

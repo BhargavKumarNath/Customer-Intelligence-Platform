@@ -35,6 +35,10 @@ src/models/*.h5
 src/models/*.pth
 *.model
 
+# ...except the checked-in propensity model: it can't be regenerated in CI/Docker
+# (training needs the full 12GB raw dataset), and it's small (~3.4MB).
+!src/models/propensity_lgbm.pkl
+
 # Generated Outputs and Logs
 logs/
 logs/**
@@ -67,6 +71,7 @@ htmlcov/
 # IDE and Editor Files
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -103,3 +108,4 @@ temp/
 .gitattributes
 
 .devcontainer
+interview/
