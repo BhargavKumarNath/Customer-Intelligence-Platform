@@ -71,5 +71,8 @@ class PropensityService:
                 f"No October activity for user_id={user_id}; cannot build propensity features"
             )
         features = pd.DataFrame([row], columns=_FEATURE_ORDER)
-        probability = float(self._model.predict(features)[0])
+        # num_threads=1: a single-row prediction gets nothing from LightGBM's default
+        # multi-threaded OpenMP path, and it avoids thread-spawning issues under
+        # heavily CPU-throttled containers (e.g. Render free tier's 0.1 vCPU).
+        probability = float(self._model.predict(features, num_threads=1)[0])
         return PropensityScore(user_id=user_id, purchase_probability=probability)
