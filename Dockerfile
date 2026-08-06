@@ -20,6 +20,12 @@ RUN python scripts/create_cloud_database.py
 
 FROM python:3.11-slim AS runtime
 
+# libgomp1: LightGBM's compiled extension dynamically loads libgomp.so.1 (GNU OpenMP)
+# at import time, which python:3.11-slim doesn't ship by default.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system app \
     && useradd --system --gid app --home-dir /app --create-home app
 
