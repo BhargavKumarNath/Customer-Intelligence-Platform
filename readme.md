@@ -1,10 +1,11 @@
 ﻿# Customer Intelligence Platform
 ## From 109M Events to Actionable Business Insights
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-0.10.2-yellow)](https://duckdb.org/)
 [![Polars](https://img.shields.io/badge/Polars-0.20.10-orange)](https://www.pola.rs/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32.0-red)](https://streamlit.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-teal)](https://fastapi.tiangolo.com/)
 
 > **An end-to-end analytics platform that processes 109M e-commerce events on a 16GB RAM laptop, no cloud warehouse required. It surfaces high-value customer segments, scores purchase propensity, and quantifies revenue opportunities.**
 
@@ -16,7 +17,9 @@
 
 The Customer Intelligence Platform takes raw behavioural event logs and turns them into something a business can actually act on. The main constraint I set for myself: everything had to run on a standard laptop, not a cloud cluster.
 
-That required careful data engineering - aggressive type-casting, dictionary encoding for high-cardinality strings, columnar storage, and a proper star-schema model sitting on top of DuckDB. The result is a Streamlit app with executive KPIs, RFM segmentation, a LightGBM purchase propensity model, and a statistical A/B test simulator.
+That required careful data engineering - aggressive type-casting, dictionary encoding for high-cardinality strings, columnar storage, and a proper star-schema model sitting on top of DuckDB. The result is a Streamlit app with executive KPIs, RFM segmentation, a LightGBM purchase propensity model, and a statistical A/B test simulator, plus a FastAPI service that exposes the same segmentation, propensity, recommendation, and A/B testing logic as versioned REST endpoints for programmatic use.
+
+Note that these two consumers are currently independent: the dashboard queries DuckDB directly rather than calling the API, so there's no runtime coupling between them today.
 
 ## Problem Statement
 
@@ -85,6 +88,37 @@ Rather than loading millions of cart events into a Python graph library, associa
 
 ---
 
+## API Service
+
+Alongside the dashboard, `api/` (FastAPI) exposes the same analytics as versioned REST endpoints, backed by a read-only `DuckDBConnectionManager` (`src/db.py`) and a thin service layer (`src/services/`) that wraps the domain logic — no reimplementation of the segmentation/propensity/recommendation/A-B-test code.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/healthz` | Liveness probe |
+| GET | `/ready` | Readiness probe — 503 if the DuckDB file or model artifact is missing |
+| GET | `/v1/users/{user_id}/segment` | RFM segment for a user |
+| GET | `/v1/users/{user_id}/propensity` | LightGBM purchase-propensity score |
+| GET | `/v1/products/{product_id}/recommendations` | Market-basket cross-sell recommendations |
+| POST | `/v1/experiments/ab-test` | Runs the A/B simulation engine against a named RFM segment |
+
+It also ships rate limiting (`slowapi`), structured JSON request logging (`structlog`, with a per-request `X-Request-ID`), and CORS scoped to the known dashboard origins. There's no authentication layer — treat it as an internal/demo service, not a public API.
+
+**Run it locally:**
+```bash
+pip install -e ".[api]"
+uvicorn api.main:app --reload
+# docs at http://localhost:8000/docs
+```
+
+**Or via Docker Compose** (builds the sample DuckDB database into the image and serves on port 8000):
+```bash
+docker compose up --build
+```
+
+CI (`.github/workflows/ci.yml`) lints, type-checks, and runs the full test suite (including `tests/api/`) on every push; CD (`.github/workflows/cd.yml`) builds and pushes the image to GHCR and can trigger a Render deploy hook once one is configured.
+
+---
+
 ## Results & Business Impact
 
 Analysis across 5.3M users, 15M sessions, and 206K products:
@@ -105,6 +139,8 @@ Analysis across 5.3M users, 15M sessions, and 206K products:
 
 ```text
 customer-intelligence-platform/
+├── api/                  # FastAPI service: routers, middleware, logging, exception handlers
+│   └── routers/          # health, segments, propensity, recommendations, experiments
 ├── app/                  # Streamlit application (7 pages)
 │   ├── components/       # Shared UI components
 │   └── pages/            # Page logic: Data Explorer, ML Engine, etc.
@@ -113,15 +149,22 @@ customer-intelligence-platform/
 ├── scripts/              # One-off build scripts
 │   ├── create_cloud_database.py
 │   └── create_sample_dataset.py
-├── src/                  # Core analytics and ML modules
+├── src/                  # Core analytics, ML, and API-service modules
 │   ├── analysis/         # RFM, cohort retention, A/B testing
+│   ├── domain/           # Pydantic request/response models for the API
 │   ├── ingestion/        # Data loading and schema validation
 │   ├── models/           # Propensity model, recommendations
 │   ├── processing/       # Sessionisation, feature engineering
-│   └── utils/            # Shared helpers
+│   ├── services/         # Service layer used by the API (segmentation, propensity, etc.)
+│   ├── utils/            # Shared helpers
+│   ├── config.py         # Pydantic-settings config for the API service
+│   └── db.py             # Read-only DuckDB connection manager for the API service
 ├── summarise/            # ETL scripts for compressing the raw dataset
-├── tests/                # Unit and integration tests
-├── requirements.txt      # Python dependencies
+├── tests/                # Unit, API, and quality-gate tests
+├── Dockerfile            # Builds and serves the FastAPI service (port 8000)
+├── docker-compose.yml    # Local API container with healthcheck
+├── requirements.txt      # Pinned deps for the Streamlit Cloud dashboard
+├── pyproject.toml        # Package + optional-dependency groups (api, dashboard, pipeline, dev)
 └── readme.md             # This file
 ```
 
@@ -129,7 +172,7 @@ customer-intelligence-platform/
 
 ## Installation & Setup
 
-You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset.
+You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above — install with `pip install -e ".[api]"` instead of `requirements.txt`.
 
 ### 1. Environment Setup
 
@@ -220,6 +263,8 @@ streamlit run app/Home.py
 - **Data engineering**: [DuckDB](https://duckdb.org/) (in-process OLAP SQL), [Polars](https://pola.rs/) (Rust-based DataFrame library), [Apache Parquet](https://arrow.apache.org/) (columnar storage)
 - **Machine learning**: [LightGBM](https://lightgbm.readthedocs.io/), scikit-learn
 - **Dashboard**: [Streamlit](https://streamlit.io/), [Plotly](https://plotly.com/)
+- **API service**: [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn, `slowapi` (rate limiting), `structlog` (structured logging), Pydantic v2
+- **Deployment**: Docker, GitHub Actions (CI: lint/type-check/test; CD: build + push to GHCR, optional Render deploy hook)
 - **Architecture**: Star schema dimensional model, config-driven pipeline
 
 ---
@@ -228,7 +273,9 @@ streamlit run app/Home.py
 
 1. **Causal inference**: The current A/B simulation assumes correlation implies causation. Integrating `DoWhy` or `EconML` would let you estimate true incrementality from the intervention.
 2. **Graph-based recommendations**: The SQL approach works well for pairwise affinities, but moving to `Neo4j` would unlock multi-hop relationships (PageRank, Node2Vec embeddings).
-3. **Real-time scoring**: The pipeline is currently batch-only. Connecting Kafka to DuckDB for intra-day event streaming and live model scoring is a natural next step.
+3. **Streaming ingestion**: Single-user scoring is already available in real time via the FastAPI service, but the underlying pipeline is still batch-only. Connecting Kafka to DuckDB for intra-day event streaming would keep segments and propensity scores fresh without a full pipeline rerun.
+4. **Wiring the dashboard to the API**: The Streamlit app and the FastAPI service currently query DuckDB independently rather than the dashboard calling the API. Consolidating onto one code path would remove the duplication.
+5. **API auth**: The service currently has no authentication layer, so it's suitable for internal/demo use but not for a public deployment as-is.
 
 ---
 
