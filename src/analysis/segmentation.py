@@ -55,9 +55,12 @@ def perform_segmentation(cfg: DictConfig):
                 frequency_count,
                 monetary_value,
                 -- Invert Recency: Shortest time = Score 5
-                6 - NTILE(5) OVER (ORDER BY recency_days) as r_score,
-                NTILE(5) OVER (ORDER BY frequency_count) as f_score,
-                NTILE(5) OVER (ORDER BY monetary_value) as m_score
+                -- Secondary ORDER BY user_id breaks ties deterministically,
+                -- otherwise rows sharing a recency/frequency/monetary value
+                -- can land in different buckets on different runs.
+                6 - NTILE(5) OVER (ORDER BY recency_days, user_id) as r_score,
+                NTILE(5) OVER (ORDER BY frequency_count, user_id) as f_score,
+                NTILE(5) OVER (ORDER BY monetary_value, user_id) as m_score
             FROM rfm_base
         )
         SELECT 

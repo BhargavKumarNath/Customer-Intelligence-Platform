@@ -14,11 +14,11 @@ st.title("⚡ Optimization Engine: Processing 109M Rows on 16GB RAM")
 st.markdown("""
 **Processing 109M Events on Commodity Hardware**
 
-This page documents the **systematic optimization strategies** that enabled processing 14.7 GB of raw CSV data (109 million events)
+This page documents the **systematic optimization strategies** that enabled processing 12 GB of raw CSV data (109 million events)
 on a 16 GB RAM machine. Key achievements:
 
-- **On-Disk Compression**: 14.7 GB CSV → 1.9 GB Parquet (**87% reduction**)
-- **In-Memory Footprint**: 3.7 GB when loaded (vs. 120+ GB naive approach = **97% reduction**)
+- **On-Disk Compression**: 12 GB CSV → 3.2 GB Parquet (**73% reduction**)
+- **In-Memory Footprint**: 3.7 GB when loaded (vs. ~120 GB naive Pandas approach = **97% reduction**)
 - **Query Performance**: Sub-second latency via DuckDB OLAP engine
 
 These techniques made advanced behavioral analytics feasible on consumer hardware without distributed computing.
@@ -34,9 +34,9 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown("**Memory Reduction**")
-    st.markdown("<h2 style='margin-top: 0;'>14.7 GB → 1.9 GB</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-top: 0;'>120 GB → 3.7 GB</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #10b981; font-size: 14px;'>↓ -97%</p>", unsafe_allow_html=True)
-    st.caption("Disk space saved through optimization")
+    st.caption("In-memory footprint vs. naive Pandas load")
 
 with col2:
     st.markdown("**Storage Compression**") 
@@ -127,7 +127,7 @@ st.info("""
 **Why ZSTD Level 3?**
 - **Level 1-5:** Fast compression, good for iterative development
 - **Level 6-10:** Slower but higher compression, only for final archival
-- **Level 3:** Sweet spot — 73% reduction with minimal write overhead
+- **Level 3:** Sweet spot: 73% reduction with minimal write overhead
 """)
 
 show_code_reference(
@@ -376,7 +376,7 @@ with col1:
     
     failure_metrics = pd.DataFrame({
         "Metric": ["Estimated RAM", "Load Time", "Query Performance", "Feasibility"],
-        "Value": ["14.7 GB CSV", "N/A (crashed)", "N/A", "❌ Impossible on 16GB"]
+        "Value": ["~120 GB (naive)", "N/A (crashed)", "N/A", "❌ Impossible on 16GB"]
     })
     st.table(failure_metrics)
 

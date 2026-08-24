@@ -132,7 +132,7 @@ def create_analysis_ready_chunks(input_path: str, output_dir: str, chunk_size: i
         df.slice(offset, chunk_size).sink_parquet(
             chunk_file,
             compression="zstd",
-            compression_level=10,
+            compression_level=3,  # match optimize_ecommerce_dataset's level-3 decision (level 10 was too slow)
         )
     
     print(f"\nCreated {n_chunks} chunk files")
@@ -234,27 +234,31 @@ def create_indexed_subsets(input_path: str, output_dir: str):
 
 
 if __name__ == "__main__":
+    RAW_DIR = Path("data") / "raw"
+    COMBINED_PARQUET = RAW_DIR / "2019-Oct-Nov.parquet"
+    OPTIMIZED_PARQUET = RAW_DIR / "ecommerce_optimized.parquet"
+
     optimize_ecommerce_dataset(
-        input_path="data/2019-Oct-Nov.parquet",
-        output_path="ecommerce_optimized.parquet"
+        input_path=str(COMBINED_PARQUET),
+        output_path=str(OPTIMIZED_PARQUET)
     )
-    
+
     create_indexed_subsets(
-        input_path="ecommerce_optimized.parquet",
-        output_dir="analysis_subsets"
+        input_path=str(OPTIMIZED_PARQUET),
+        output_dir=str(Path("data") / "analysis_subsets")
     )
-        
+
     print("\n" + "="*60)
     print("LOADING FOR ANALYSIS EXAMPLES")
     print("="*60)
-    
+
     # Full dataset (lazy)
-    df_full = pl.scan_parquet("ecommerce_optimized.parquet")
+    df_full = pl.scan_parquet(str(OPTIMIZED_PARQUET))
     print("\nFull dataset (lazy):")
     print(df_full.schema)
-    
+
     # Sample 10% for quick exploration
-    df_sample = load_for_analysis("ecommerce_optimized.parquet", sample_frac=0.1)
+    df_sample = load_for_analysis(str(OPTIMIZED_PARQUET), sample_frac=0.1)
     print("\n10% Sample (lazy):")
     print(df_sample.select(pl.len()).collect())
     

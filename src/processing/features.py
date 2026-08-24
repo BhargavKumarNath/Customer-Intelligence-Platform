@@ -31,47 +31,38 @@ def build_feature_store(cfg: DictConfig):
         logger.info("   Aggregating session metrics to user level...")
         query_session_aggs = """
         CREATE OR REPLACE TEMP TABLE session_features AS
-        SELECT 
-            user_id,
-            COUNT(user_session) as total_sessions,
-            AVG(duration_sec) as avg_session_duration,
-            STDDEV(duration_sec) as std_session_duration,
-            AVG(event_count) as avg_events_per_session,
-            
-            -- Behavior Ratios
-            SUM(CAST(has_cart AS INT)) / COUNT(user_session) as cart_rate,
-            SUM(CAST(has_purchase AS INT)) / NULLIF(SUM(CAST(has_cart AS INT)), 0) as checkout_rate,
-            
-            -- Time Preference
-            mode(dayname(session_start)) as preferred_weekday,
-            mode(part_of_day(session_start)) as preferred_time_of_day
-        FROM fact_sessions
-        GROUP BY user_id;
-        """
-        # Actually DuckDB doesn't have `part_of_day`, let's fix that logic in the final join or simplify.
-        
-        query_session_aggs_safe = """
-        CREATE OR REPLACE TEMP TABLE session_features AS
-        SELECT 
+        SELECT
             user_id,
             COUNT(user_session) as total_sessions,
             AVG(duration_sec) as avg_session_duration,
             COALESCE(STDDEV(duration_sec), 0) as std_session_duration,
             AVG(event_count) as avg_events_per_session,
-            
+
             -- Interaction Rates (Cast to Double to avoid integer division)
             CAST(SUM(CAST(has_cart AS INT)) AS DOUBLE) / COUNT(user_session) as cart_rate,
-            
+
             -- Checkout Rate (Purchases / Carts). Avoid Division by Zero.
-            CASE 
+            CASE
                 WHEN SUM(CAST(has_cart AS INT)) = 0 THEN 0
-                ELSE CAST(SUM(CAST(has_purchase AS INT)) AS DOUBLE) / SUM(CAST(has_cart AS INT)) 
-            END as checkout_rate
-            
+                ELSE CAST(SUM(CAST(has_purchase AS INT)) AS DOUBLE) / SUM(CAST(has_cart AS INT))
+            END as checkout_rate,
+
+            -- Time Preference. DuckDB has no built-in `part_of_day()` (an
+            -- earlier version of this query called it directly and failed at
+            -- runtime); bucket the session-start hour explicitly instead.
+            mode(dayname(session_start)) as preferred_weekday,
+            mode(
+                CASE
+                    WHEN EXTRACT(HOUR FROM session_start) BETWEEN 5 AND 11 THEN 'Morning'
+                    WHEN EXTRACT(HOUR FROM session_start) BETWEEN 12 AND 16 THEN 'Afternoon'
+                    WHEN EXTRACT(HOUR FROM session_start) BETWEEN 17 AND 21 THEN 'Evening'
+                    ELSE 'Night'
+                END
+            ) as preferred_time_of_day
         FROM fact_sessions
         GROUP BY user_id;
         """
-        con.execute(query_session_aggs_safe)
+        con.execute(query_session_aggs)
 
         # 2. BUILD THE GOLDEN TABLE (LEFT JOIN)
         # Base: dim_users (All users)
@@ -105,8 +96,10 @@ def build_feature_store(cfg: DictConfig):
             COALESCE(s.std_session_duration, 0) as std_session_duration,
             COALESCE(s.avg_events_per_session, 0) as avg_events_per_session,
             COALESCE(s.cart_rate, 0) as cart_rate,
-            COALESCE(s.checkout_rate, 0) as checkout_rate
-            
+            COALESCE(s.checkout_rate, 0) as checkout_rate,
+            COALESCE(s.preferred_weekday, 'Unknown') as preferred_weekday,
+            COALESCE(s.preferred_time_of_day, 'Unknown') as preferred_time_of_day
+
         FROM dim_users u
         LEFT JOIN analysis_rfm_segments r ON u.user_id = r.user_id
         LEFT JOIN session_features s ON u.user_id = s.user_id;

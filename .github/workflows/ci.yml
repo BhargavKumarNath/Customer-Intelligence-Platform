@@ -31,18 +31,21 @@ jobs:
         run: >
           ruff check
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
+          src/processing/dimensional_model.py
           api tests
 
       - name: Ruff format check
         run: >
           ruff format --check
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
+          src/processing/dimensional_model.py
           api tests
 
       - name: mypy
         run: >
           mypy
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
+          src/processing/dimensional_model.py
           api
 
       - name: Rebuild sample.duckdb from the tracked parquet

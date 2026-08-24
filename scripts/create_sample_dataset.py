@@ -30,6 +30,11 @@ OUTPUT_PARQUET = OUTPUT_DIR / "sample_optimized.parquet"
 
 # Sampling parameters
 SAMPLE_PERCENTAGE = 3.0  # 3% of data = ~3.3M events
+# DuckDB 0.10+ dropped `SET random_seed`, but `setseed()` (range [-1, 1]) still
+# seeds RANDOM() deterministically per-connection. Verified: two fresh
+# connections calling setseed(RANDOM_SEED / 100) then random() return the
+# identical value. Without this call RANDOM_SEED was dead code and the sample
+# was not reproducible run-to-run.
 RANDOM_SEED = 42
 
 
@@ -98,7 +103,9 @@ def create_sample_dataset():
         AND RANDOM() < 0.5  -- Additional sampling to fine-tune final size
         """
         
-        # DuckDB 0.10+ doesn't support SET random_seed, RANDOM() provides sufficient randomness
+        # Seed RANDOM() deterministically so the sample is reproducible run-to-run
+        # (must be in [-1, 1]; a fixed integer seed is mapped into that range).
+        con.execute(f"SELECT setseed({(RANDOM_SEED % 200 - 100) / 100.0})")
         con.execute(sample_query)
         
         # Check sample size

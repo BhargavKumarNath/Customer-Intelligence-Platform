@@ -1,3 +1,20 @@
+"""
+Dimensional model builder for the full-scale, Hydra-driven local pipeline
+(against the full 109M-row `data/db/behavior.duckdb`, built via
+`src/ingestion/loader.py`).
+
+This intentionally does NOT share `src/processing/dimensional_model.py`.
+That module is the shared builder for the sample/cloud path
+(`scripts/create_cloud_database.py` and `app/db_utils.py`'s cloud mode),
+whose schema evolved separately (e.g. `fact_daily_kpis.daily_events` here is
+`total_events`, and `dim_users` here additionally carries
+`favorite_category_by_recency`). Unifying the two would mean reconciling
+those schema differences and re-verifying every full-scale consumer
+(`src/analysis/segmentation.py`, `retention.py`, `src/models/recommendations.py`),
+which isn't something that can be safely done without the full local dataset
+this path is meant to run against.
+"""
+
 import duckdb
 import hydra
 from omegaconf import DictConfig

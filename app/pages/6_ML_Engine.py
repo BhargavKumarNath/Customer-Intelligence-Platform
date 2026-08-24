@@ -1,9 +1,34 @@
+import json
+from pathlib import Path
+
 import streamlit as st
 import plotly.express as px
 import pandas as pd
 from db_utils import run_query
 
 st.set_page_config(page_title="ML Engine", page_icon="🤖", layout="wide")
+
+FEATURE_LABELS = {
+    "oct_events": "Oct Events (Total Activity)",
+    "active_span_days": "Active Span (Days)",
+    "oct_carts": "Cart Additions",
+    "oct_views": "Product Views",
+    "recency_oct": "Recency (Days Ago)",
+    "oct_sessions": "Session Count",
+    "oct_removes": "Cart Removals",
+}
+
+
+@st.cache_data
+def load_model_metrics():
+    """Real metrics.json written by src/models/train_propensity.py, not
+    hardcoded constants copied out of a training log by hand, so this page
+    can't silently drift from what the checked-in model actually does."""
+    metrics_path = Path(__file__).parent.parent.parent / "src" / "models" / "metrics.json"
+    if not metrics_path.exists():
+        return None
+    with open(metrics_path) as f:
+        return json.load(f)
 
 st.title("🤖 AI & Machine Learning Engine")
 st.markdown("""
@@ -13,21 +38,28 @@ This module demonstrates two production-grade ML systems operationalized in this
 """)
 
 # ML Methodology Context
+_metrics = load_model_metrics()
+
 with st.expander("🧠 Model Training & Feature Engineering"):
-    st.markdown("""
+    _perf_line = (
+        f"AUC-ROC {_metrics['auc_roc']:.2f}, achieving {_metrics['lift_top5pct']:.1f}x lift vs random targeting "
+        f"(trained on {_metrics['train_rows']:,} rows, git `{_metrics['git_sha']}`)"
+        if _metrics
+        else "Run `python src/models/train_propensity.py` to generate src/models/metrics.json"
+    )
+    st.markdown(f"""
     **Propensity Model (LightGBM):**
-    - **Objective:** Binary classification — will user purchase in November?
+    - **Objective:** Binary classification: will user purchase in November?
     - **Training Data:** Temporal split (October behavior → November target)
     - **Features:** Recency, session count, cart events, active span, product views
     - **Hyperparameters:** num_leaves=31, learning_rate=0.05, early_stopping=50 rounds
-    - **Performance:** AUC-ROC ~0.XX, achieving 4.5x lift vs random targeting
-    
+    - **Performance:** {_perf_line}
+
     **Recommendation Engine (Market Basket):**
     - **Algorithm:** Association rules mining (Lift metric)
-    - **Self-Join Strategy:** Product pairs from same sessions (15M sessions)
-    - **Filtering:** Min support ≥5 co-occurrences, Lift >1.2
-    - **Scale:** Computed 10M+ product pairs in 90 seconds
-    
+    - **Self-Join Strategy:** Product pairs from same sessions
+    - **Filtering:** Min support ≥3 co-occurrences (sample scale), Lift >1.2
+
     *Implementations: `src/models/train_propensity.py` and `src/models/recommendations.py`*
     """)
 
@@ -134,54 +166,66 @@ st.markdown("""
 We trained a Gradient Boosting model to predict which users will buy in **November** based on their **October** behavior.
 """)
 
-c1, c2 = st.columns(2)
-
-with c1:
-    st.subheader("Feature Importance")
-    st.markdown("What behaviors signal a future purchase?")
-    
-    # Hardcoded from training logs (Step 6) for visualisation
-    data = {
-        'Feature': ['Oct Events (Total Activity)', 'Active Span Days', 'Cart Additions', 'Product Views', 'Recency (Days ago)'],
-        'Importance (Gain)': [631380, 436977, 411642, 222948, 155719]
-    }
-    df_imp = pd.DataFrame(data).sort_values('Importance (Gain)', ascending=True)
-    
-    fig_imp = px.bar(
-        df_imp, 
-        x='Importance (Gain)', 
-        y='Feature', 
-        orientation='h',
-        title="Top Predictive Drivers",
-        color='Importance (Gain)',
-        color_continuous_scale='Blues'
+if not _metrics:
+    st.warning(
+        "No trained model metrics found. Run `python src/models/train_propensity.py "
+        "paths.database=data/sample/sample.duckdb hydra.run.dir=. hydra.output_subdir=null` "
+        "to generate `src/models/metrics.json`."
     )
-    st.plotly_chart(fig_imp, width='stretch')
+else:
+    c1, c2 = st.columns(2)
 
-with c2:
-    st.subheader("Model Business Impact")
-    st.markdown("How much better is AI than random targeting?")
-    
-    # Data from our Model Evaluation log
-    metrics = {
-        'Audience': ['Random Targeting', 'AI Top 5% Segment'],
-        'Conversion Rate': [0.0803, 0.3662]
-    }
-    df_lift = pd.DataFrame(metrics)
-    
-    fig_lift = px.bar(
-        df_lift,
-        x='Audience',
-        y='Conversion Rate',
-        color='Audience',
-        title="Conversion Rate Comparison (4.5x Lift)",
-        text_auto='.1%',
-        color_discrete_sequence=['gray', '#00CC96']
-    )
-    fig_lift.update_layout(showlegend=False)
-    st.plotly_chart(fig_lift, width='stretch')
-    
-    st.success("""
-    **Conclusion:** By targeting the users identified by the LightGBM model, 
-    marketing efficiency improves by **450%**.
-    """)
+    with c1:
+        st.subheader("Feature Importance")
+        st.markdown("What behaviors signal a future purchase?")
+
+        # Real gain-based importances from the checked-in model, not a
+        # hand-copied snapshot of a training log. Includes oct_removes
+        # (cart removals) at its real, honest value: zero. It was a
+        # reasonable feature to try; the model found no signal in it.
+        importance = _metrics["feature_importance_gain"]
+        df_imp = pd.DataFrame({
+            "Feature": [FEATURE_LABELS.get(f, f) for f in importance.keys()],
+            "Importance (Gain)": list(importance.values()),
+        }).sort_values("Importance (Gain)", ascending=True)
+
+        fig_imp = px.bar(
+            df_imp,
+            x='Importance (Gain)',
+            y='Feature',
+            orientation='h',
+            title="Predictive Drivers (Gain)",
+            color='Importance (Gain)',
+            color_continuous_scale='Blues'
+        )
+        st.plotly_chart(fig_imp, width='stretch')
+        if importance.get("oct_removes") == 0:
+            st.caption("`oct_removes` (cart-abandonment count) carries zero importance: engineered but not predictive on this data.")
+
+    with c2:
+        st.subheader("Model Business Impact")
+        st.markdown("How much better is AI than random targeting?")
+
+        lift = _metrics["lift_top5pct"]
+        df_lift = pd.DataFrame({
+            'Audience': ['Population Baseline', 'AI Top 5% Segment'],
+            'Conversion Rate': [_metrics["baseline_conversion_rate"], _metrics["top5pct_conversion_rate"]]
+        })
+
+        fig_lift = px.bar(
+            df_lift,
+            x='Audience',
+            y='Conversion Rate',
+            color='Audience',
+            title=f"Conversion Rate Comparison ({lift:.1f}x Lift)",
+            text_auto='.1%',
+            color_discrete_sequence=['gray', '#00CC96']
+        )
+        fig_lift.update_layout(showlegend=False)
+        st.plotly_chart(fig_lift, width='stretch')
+
+        st.success(f"""
+        **Conclusion:** By targeting the users identified by the LightGBM model,
+        marketing efficiency improves by **{(lift - 1) * 100:.0f}%** (AUC-ROC {_metrics['auc_roc']:.2f} on
+        {_metrics['test_rows']:,} held-out users, temporally split: October behavior → November outcome).
+        """)

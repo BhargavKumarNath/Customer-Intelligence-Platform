@@ -4,6 +4,9 @@ from omegaconf import DictConfig
 import logging
 import time
 import sys
+import json
+import subprocess
+from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
@@ -71,8 +74,14 @@ def train_propensity_model(cfg: DictConfig):
             -- Target Variable (0 or 1)
             COALESCE(n.converted_in_nov, 0) as target
         FROM oct_behavior t
-        LEFT JOIN nov_outcome n ON t.user_id = n.user_id;
+        LEFT JOIN nov_outcome n ON t.user_id = n.user_id
+        ORDER BY t.user_id;
         """
+        # ORDER BY above matters: without it, DuckDB doesn't guarantee row
+        # order across runs (especially with multi-threaded execution), so
+        # even a seeded train_test_split(random_state=42) would shuffle a
+        # different underlying row order each run and silently produce a
+        # different actual train/test split every time this script runs.
         
         # Load into Pandas (Should be manageable ~3M rows active in Oct)
         start = time.time()
@@ -98,7 +107,13 @@ def train_propensity_model(cfg: DictConfig):
         train_data = lgb.Dataset(X_train, label=y_train)
         test_data = lgb.Dataset(X_test, label=y_test, reference=train_data)
         
-        # Parameters
+        # Parameters. Deliberately CPU-only (no `device: gpu`), since the project's
+        # thesis is that the whole pipeline, including model training, runs on
+        # a single laptop without a cloud cluster or a GPU.
+        # Seeded explicitly: `feature_fraction` makes LightGBM sample a random
+        # subset of features per tree, and without a fixed seed that sampling
+        # (and the resulting AUC/feature-importance numbers) differs slightly
+        # between otherwise-identical runs on identical data.
         params = {
             'objective': 'binary',
             'metric': 'auc',
@@ -106,6 +121,11 @@ def train_propensity_model(cfg: DictConfig):
             'num_leaves': 31,
             'learning_rate': 0.05,
             'feature_fraction': 0.9,
+            'seed': 42,
+            'feature_fraction_seed': 42,
+            'bagging_seed': 42,
+            'data_random_seed': 42,
+            'deterministic': True,
         }
         
         # Train with early stopping
@@ -138,20 +158,60 @@ def train_propensity_model(cfg: DictConfig):
         
         logger.info(f"   AUC-ROC Score: {auc:.4f} (Excellent > 0.8)")
         logger.info(f"   Precision (Top 5%): {precision:.4f} (Of our top picks, how many bought?)")
-        
+
+        # Top-5%-by-score conversion lift over the population baseline. This
+        # is the headline number the dashboard's ML Engine page shows.
+        baseline_rate = float(y_test.mean())
+        top5_rate = float(y_test[y_pred_binary == 1].mean())
+        lift = top5_rate / baseline_rate if baseline_rate > 0 else float("nan")
+        logger.info(f"   Baseline conversion: {baseline_rate:.4f} | Top-5% conversion: {top5_rate:.4f} | Lift: {lift:.2f}x")
+
         # Feature Importance
         importance = pd.DataFrame({
             'feature': X.columns,
             'importance': model.feature_importance(importance_type='gain')
         }).sort_values('importance', ascending=False)
-        
+
         logger.info(f"\nTop Predictive Features:\n{importance.head(5)}")
-        
+
         # 5. SAVE MODEL & RESULTS
         model_path = "src/models/propensity_lgbm.pkl"
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
         logger.info(f"Model saved to {model_path}")
+
+        # Metrics artifact: a single source of truth the dashboard (ML
+        # Engine page) reads for feature importances and the lift comparison
+        # instead of carrying separately hardcoded copies of these numbers
+        # that silently drift from what the checked-in model actually does.
+        try:
+            git_sha = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            git_sha = None
+
+        metrics = {
+            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "git_sha": git_sha,
+            "train_rows": int(len(X_train)),
+            "test_rows": int(len(X_test)),
+            "best_iteration": int(model.best_iteration),
+            "auc_roc": round(auc, 4),
+            "precision_top5pct": round(float(precision), 4),
+            "recall_top5pct": round(float(recall), 4),
+            "baseline_conversion_rate": round(baseline_rate, 4),
+            "top5pct_conversion_rate": round(top5_rate, 4),
+            "lift_top5pct": round(lift, 4),
+            "feature_importance_gain": {
+                row.feature: float(row.importance) for row in importance.itertuples()
+            },
+            "params": params,
+        }
+        metrics_path = "src/models/metrics.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=2)
+        logger.info(f"Metrics saved to {metrics_path}")
 
     except Exception as e:
         logger.error(f"Error during training: {e}")

@@ -98,6 +98,7 @@ config/config.local.yaml
 .env
 .env.local
 *.secret
+FIRST_ROUND_PREP.md
 
 # Temporary Files 
 *.tmp

@@ -1,0 +1,35 @@
+{
+  "trained_at": "2026-08-23T23:30:55.105527+00:00",
+  "git_sha": "227e38f",
+  "train_rows": 60732,
+  "test_rows": 15183,
+  "best_iteration": 58,
+  "auc_roc": 0.7203,
+  "precision_top5pct": 0.2566,
+  "recall_top5pct": 0.2203,
+  "baseline_conversion_rate": 0.0583,
+  "top5pct_conversion_rate": 0.2566,
+  "lift_top5pct": 4.4019,
+  "feature_importance_gain": {
+    "active_span_days": 11694.519414186478,
+    "oct_sessions": 5725.949339270592,
+    "oct_events": 4693.70626282692,
+    "oct_carts": 3948.027890563011,
+    "oct_views": 3913.6185805797577,
+    "recency_oct": 3577.2649363279343,
+    "oct_removes": 0.0
+  },
+  "params": {
+    "objective": "binary",
+    "metric": "auc",
+    "boosting_type": "gbdt",
+    "num_leaves": 31,
+    "learning_rate": 0.05,
+    "feature_fraction": 0.9,
+    "seed": 42,
+    "feature_fraction_seed": 42,
+    "bagging_seed": 42,
+    "data_random_seed": 42,
+    "deterministic": true
+  }
+}

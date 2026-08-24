@@ -1,4 +1,23 @@
+import json
+from pathlib import Path
+
 import streamlit as st
+
+
+def _lightgbm_application_text() -> str:
+    """Real AUC/lift from src/models/metrics.json, not a hardcoded '0.XX'
+    placeholder that was never filled in with an actual measured value."""
+    metrics_path = Path(__file__).parent.parent.parent / "src" / "models" / "metrics.json"
+    try:
+        with open(metrics_path) as f:
+            m = json.load(f)
+        return (
+            f"Trained propensity model with {m['auc_roc']:.2f} AUC-ROC, "
+            f"achieving {m['lift_top5pct']:.1f}x lift vs random targeting."
+        )
+    except (FileNotFoundError, KeyError, json.JSONDecodeError):
+        return "Trained propensity model. Run src/models/train_propensity.py to populate real AUC-ROC/lift metrics."
+
 
 # Technical glossary for the dashboard
 GLOSSARY = {
@@ -35,7 +54,7 @@ GLOSSARY = {
     "LightGBM": {
         "full": "Light Gradient Boosting Machine",
         "definition": "Fast, distributed gradient boosting framework by Microsoft. Uses leaf-wise tree growth for high accuracy.",
-        "application": "Trained propensity model with 0.XX AUC-ROC, achieving 4.5x lift vs random targeting."
+        "application": _lightgbm_application_text()
     },
     "Sessionization": {
         "full": "User Session Construction",

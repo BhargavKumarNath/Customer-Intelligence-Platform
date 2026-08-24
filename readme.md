@@ -41,9 +41,9 @@ Note that these two consumers are currently independent: the dashboard queries D
 The biggest trap in e-commerce behavioural modelling is leaking future events into training data via random K-fold splits. If a user purchased in November and some of their November sessions end up in the training fold, the model learns the wrong thing.
 
 To avoid this, the propensity model (`src/models/train_propensity.py`) uses a strict temporal split:
-- **Features**: Built entirely from October session behaviour — aggregation ratios, RFM flags, checkout density, etc.
+- **Features**: Built entirely from raw October event counts: total events, sessions, views, carts, cart removals, active span in days, and days since the last October event. (A separate, richer `features_users` table with RFM flags and checkout density exists for other analyses, but it isn't what this model trains on, see the Feature Engineering note below.)
 - **Target**: Whether the user made a purchase in November.
-- **Result**: The 75% ROC-AUC and 4.5x top-5% conversion lift reflect genuine out-of-sample performance, not an artefact of the validation methodology.
+- **Result**: The reported AUC and top-5% conversion lift reflect genuine out-of-sample performance, not an artefact of the validation methodology. Verified by retraining from scratch on the sample dataset (CPU-only, no GPU, fully deterministic run to run): 0.72 AUC, 4.4x lift (25.7% top-5% conversion vs. a 5.8% baseline).
 
 ### 2. A/B Test Simulation Engine
 
@@ -54,7 +54,7 @@ Correlation is easy to find; knowing whether a segment is worth targeting takes 
 
 ### 3. Market Basket Analysis in Pure SQL
 
-Rather than loading millions of cart events into a Python graph library, association rule mining runs entirely inside DuckDB (`src/models/recommendations.py`). Window functions and self-joins handle product support, co-occurrence counts, confidence, and lift — all on disk. This keeps memory usage flat even across 4.5M purchase events.
+Rather than loading millions of cart events into a Python graph library, association rule mining runs entirely inside DuckDB (`src/models/recommendations.py`). Window functions and self-joins handle product support, co-occurrence counts, confidence, and lift, all on disk. This keeps memory usage flat even across 4.5M purchase events.
 
 ---
 
@@ -64,11 +64,11 @@ Rather than loading millions of cart events into a Python graph library, associa
 
 ### 1. Ingestion & Memory Optimisation
 
-- **Raw input**: 12GB CSV, 109M rows, covering Oct–Nov 2019.
+- **Raw input**: 12GB CSV, 109M rows, covering Oct-Nov 2019.
 - **Optimisation script** (`summarise/optimize_dataset.py`):
-    - Uses Polars lazy evaluation (`pl.scan_parquet()`) to process data in streaming chunks rather than loading everything at once — this is what makes it viable on 16GB RAM.
-    - Downcasts numeric types (`Int64` -> `Int32` where safe) and replaces high-cardinality UUID strings with integer-keyed dictionaries. A naive Pandas `read_csv()` on this data requires ~120GB of RAM; after type optimisation the in-memory footprint is ~3.7GB — a **97% reduction**.
-    - Writes to Parquet with ZSTD level-3 compression: the 14.7GB raw CSV shrinks to **1.9GB on disk** (87% disk reduction), and reads back ~30x faster than CSV.
+    - Uses Polars lazy evaluation (`pl.scan_parquet()`) to process data in streaming chunks rather than loading everything at once, which is what makes it viable on 16GB RAM.
+    - Downcasts numeric types (`Int64` -> `Int32` where safe) and replaces high-cardinality UUID strings with integer-keyed dictionaries. A naive Pandas `read_csv()` on this data requires ~120GB of RAM; after type optimisation the in-memory footprint is ~3.7GB, a **97% reduction**.
+    - Writes to Parquet with ZSTD level-3 compression: the 12GB raw CSV shrinks to **3.2GB on disk** (73% disk reduction), and reads back ~30x faster than CSV.
 
 ### 2. Dimensional Modelling & OLAP Layer
 
@@ -79,10 +79,10 @@ Rather than loading millions of cart events into a Python graph library, associa
 ### 3. Feature Engineering & ML
 
 - **Feature store** (`src/processing/features.py`):
-    - Builds user-level features in SQL — session aggregates, checkout density, duration variance, RFM flags — all materialised into a `features_users` table.
+    - Builds user-level features in SQL (session aggregates, checkout density, duration variance, RFM flags), all materialised into a `features_users` table. This table backs the A/B test module's segment lookups. It is a separate, richer feature set from what the propensity model below trains on, not a shared input.
 - **Propensity model** (`src/models/train_propensity.py`):
-    - Trains a LightGBM classifier on October features with November purchases as the target label. The strict out-of-time split (described above) prevents any future data from leaking into training.
-    - Achieves **75% ROC-AUC** on the held-out November period; the top 5% of scored users convert at **4.5x the baseline rate**.
+    - Trains a LightGBM classifier on a narrower, purpose-built set of October features (see "Out-of-Time Validation Split" above) with November purchases as the target label. The strict out-of-time split prevents any future data from leaking into training.
+    - The checked-in model (trained on the sample dataset, deterministic seed) achieves **0.72 ROC-AUC** on the held-out November period; the top 5% of scored users convert at **4.4x the baseline rate**.
 - **Recommendations** (`src/models/recommendations.py`):
     - Runs market basket analysis through DuckDB to produce a `predictions_product_affinity` table of cross-sell candidates.
 
@@ -90,18 +90,18 @@ Rather than loading millions of cart events into a Python graph library, associa
 
 ## API Service
 
-Alongside the dashboard, `api/` (FastAPI) exposes the same analytics as versioned REST endpoints, backed by a read-only `DuckDBConnectionManager` (`src/db.py`) and a thin service layer (`src/services/`) that wraps the domain logic — no reimplementation of the segmentation/propensity/recommendation/A-B-test code.
+Alongside the dashboard, `api/` (FastAPI) exposes the same analytics as versioned REST endpoints, backed by a read-only `DuckDBConnectionManager` (`src/db.py`) and a thin service layer (`src/services/`) that wraps the domain logic. There is no reimplementation of the segmentation/propensity/recommendation/A-B-test code.
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/healthz` | Liveness probe |
-| GET | `/ready` | Readiness probe — 503 if the DuckDB file or model artifact is missing |
+| GET | `/ready` | Readiness probe (503 if the DuckDB file or model artifact is missing) |
 | GET | `/v1/users/{user_id}/segment` | RFM segment for a user |
 | GET | `/v1/users/{user_id}/propensity` | LightGBM purchase-propensity score |
 | GET | `/v1/products/{product_id}/recommendations` | Market-basket cross-sell recommendations |
 | POST | `/v1/experiments/ab-test` | Runs the A/B simulation engine against a named RFM segment |
 
-It also ships rate limiting (`slowapi`), structured JSON request logging (`structlog`, with a per-request `X-Request-ID`), and CORS scoped to the known dashboard origins. There's no authentication layer — treat it as an internal/demo service, not a public API.
+It also ships rate limiting (`slowapi`), structured JSON request logging (`structlog`, with a per-request `X-Request-ID`), and CORS scoped to the known dashboard origins. There's no authentication layer, so treat it as an internal/demo service, not a public API.
 
 **Run it locally:**
 ```bash
@@ -125,8 +125,8 @@ Analysis across 5.3M users, 15M sessions, and 206K products:
 
 | Finding | Numbers | What to do with it |
 |---|---|---|
-| **High-intent users are identifiable** | Top 5% of ML-scored users show a 36% purchase probability — **4.5x the population average**. | Run targeted campaigns against this cohort rather than the full list. |
-| **At-risk VIPs** | ~36,000 top-decile users ($890 avg spend) showing churn signals. | This segment is small enough for a personalised reactivation flow — the spend data makes them worth prioritising. |
+| **High-intent users are identifiable** | Top 5% of ML-scored users convert at **4.4x the population baseline rate** (verified by retraining on the sample dataset: 25.7% top-5% conversion vs. a 5.8% baseline). | Run targeted campaigns against this cohort rather than the full list. |
+| **At-risk VIPs** | ~36,000 top-decile users ($890 avg spend) showing churn signals. | This segment is small enough for a personalised reactivation flow, and the spend data makes them worth prioritising. |
 | **Product affinities are strong** | 10M+ product pairs with lift > 1.2 across 4.5M purchase events. | "Frequently bought together" recommendations have a real signal to work from. |
 
 ### A couple of interesting findings:
@@ -153,8 +153,8 @@ customer-intelligence-platform/
 │   ├── analysis/         # RFM, cohort retention, A/B testing
 │   ├── domain/           # Pydantic request/response models for the API
 │   ├── ingestion/        # Data loading and schema validation
-│   ├── models/           # Propensity model, recommendations
-│   ├── processing/       # Sessionisation, feature engineering
+│   ├── models/           # Propensity model, metrics.json, recommendations
+│   ├── processing/       # Sessionisation, feature engineering, shared dimensional-model builder
 │   ├── services/         # Service layer used by the API (segmentation, propensity, etc.)
 │   ├── utils/            # Shared helpers
 │   ├── config.py         # Pydantic-settings config for the API service
@@ -172,7 +172,7 @@ customer-intelligence-platform/
 
 ## Installation & Setup
 
-You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above — install with `pip install -e ".[api]"` instead of `requirements.txt`.
+You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above and install with `pip install -e ".[api]"` instead of `requirements.txt`.
 
 ### 1. Environment Setup
 
@@ -216,7 +216,7 @@ python summarise/optimize_dataset.py
 
 ### Rebuilding from Scratch
 
-The large data files (~22GB total) are not checked into Git — they're all reproducible from the public Kaggle source. Here's the full rebuild sequence:
+The large data files (~22GB total) are not checked into Git. They're all reproducible from the public Kaggle source. Here's the full rebuild sequence:
 
 **Files you'll need to regenerate:**
 
@@ -238,9 +238,7 @@ python summarise/combine_csv_to_parquet.py \
     data/raw/2019-Oct-Nov.parquet
 
 # 3. Run the memory-optimisation pass (ZSTD compression + type-casting).
-#    Note: optimize_dataset.py has hard-coded input/output paths at the bottom
-#    of the file. Update them to data/raw/2019-Oct-Nov.parquet ->
-#    data/raw/ecommerce_optimized.parquet before running.
+#    Reads data/raw/2019-Oct-Nov.parquet -> writes data/raw/ecommerce_optimized.parquet
 python summarise/optimize_dataset.py
 
 # 4. Build the full DuckDB database
@@ -274,7 +272,7 @@ streamlit run app/Home.py
 1. **Causal inference**: The current A/B simulation assumes correlation implies causation. Integrating `DoWhy` or `EconML` would let you estimate true incrementality from the intervention.
 2. **Graph-based recommendations**: The SQL approach works well for pairwise affinities, but moving to `Neo4j` would unlock multi-hop relationships (PageRank, Node2Vec embeddings).
 3. **Streaming ingestion**: Single-user scoring is already available in real time via the FastAPI service, but the underlying pipeline is still batch-only. Connecting Kafka to DuckDB for intra-day event streaming would keep segments and propensity scores fresh without a full pipeline rerun.
-4. **Wiring the dashboard to the API**: The Streamlit app and the FastAPI service currently query DuckDB independently rather than the dashboard calling the API. Consolidating onto one code path would remove the duplication.
+4. **Wiring the dashboard to the API**: The Streamlit app and the FastAPI service still query DuckDB independently rather than the dashboard calling the API. Their star-schema/RFM/retention SQL is now consolidated into one shared module (`src/processing/dimensional_model.py`), which removed the duplication one level down, but the two services themselves remain decoupled. Fully wiring the dashboard to the API would remove what's left.
 5. **API auth**: The service currently has no authentication layer, so it's suitable for internal/demo use but not for a public deployment as-is.
 
 ---
