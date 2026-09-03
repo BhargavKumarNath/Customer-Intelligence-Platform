@@ -97,6 +97,8 @@ desktop.ini
 config/config.local.yaml
 .env
 .env.local
+.env.*.local
+!.env.example
 *.secret
 FIRST_ROUND_PREP.md
 
@@ -114,3 +116,40 @@ temp/
 .devcontainer
 interview/
 docs/
+
+# ---------------------------------------------------------------------------
+# Deployment migration (Stack E — see DEPLOYMENT_ARCHITECTURE_REVIEW.md /
+# deployment_stages.md). Added in Phase 0; frontend/cloud dirs land in Phase 4+.
+# ---------------------------------------------------------------------------
+
+# Phase 0 spike — throwaway (bundles a 32 MB parquet + node_modules)
+spike/
+
+# Extra coverage / test-report artifacts (Python .coverage + htmlcov already covered above)
+coverage.xml
+.coverage.*
+coverage/
+
+# Frontend (Next.js / Vite) — Phase 4+
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+playwright-report/
+test-results/
+.lighthouseci/
+
+# Cloud / deploy tooling local state — never commit credentials or provider caches
+.vercel/
+.wrangler/
+.gcloud/
+gha-creds-*.json
+*service-account*.json
+*.gserviceaccount.json
+
+
+DEPLOYMENT_ARCHITECTURE_REVIEW.md
+deployment_stages.md
+.gitignore
