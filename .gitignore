@@ -109,13 +109,8 @@ temp/
 *.bak
 *.swp
 
-# Git Files
-.git/
-.gitattributes
-
-.devcontainer
+.devcontainer/
 interview/
-docs/
 
 # ---------------------------------------------------------------------------
 # Deployment migration (Stack E — see DEPLOYMENT_ARCHITECTURE_REVIEW.md /
@@ -129,6 +124,10 @@ spike/
 coverage.xml
 .coverage.*
 coverage/
+
+# Security scanners (Phase 1) — local run caches; CI runs these inside throwaway containers
+.trivycache/
+.trivy/
 
 # Frontend (Next.js / Vite) — Phase 4+
 node_modules/

@@ -1,30 +1,20 @@
-# Trivy suppressions — see .github/workflows/ci.yml.
+# Trivy suppressions — see .github/workflows/ci.yml (`security` + `docker-build` jobs).
 # Format: one advisory ID per line; lines starting with # are comments.
+#
+# Phase 1 (task 4) cleared the previous base-image suppressions: the Dockerfile
+# now digest-pins python:3.11-slim AND removes the unused system-Python
+# pip/setuptools/wheel from the runtime stage, so CVE-2026-23949,
+# GHSA-6v7p-g79w-8964, CVE-2025-47273 and CVE-2026-24049 no longer have a
+# package to match. A local `trivy image` scan of the rebuilt image is clean.
 
 # ---------------------------------------------------------------------------
-# Legacy Streamlit manifest (requirements.txt)
+# Legacy Streamlit manifest (requirements.txt) — retained one cycle
 # ---------------------------------------------------------------------------
-# CVE-2026-25087 — Apache Arrow C++ use-after-free DoS on malicious Arrow IPC
-# input. Via pyarrow==15.0.0 in requirements.txt (the Streamlit Community Cloud
-# manifest only). Not exploitable here: the dashboard reads its own trusted
-# parquet, never attacker-supplied Arrow IPC. requirements.txt is not used by
-# CI, the API, or the image, and is deleted in deployment_stages.md Phase 9.
-# Re-evaluate at Phase 1 task 8 (bump / retire requirements.txt).
+# CVE-2026-25087 — Apache Arrow C++ use-after-free DoS via malicious Arrow IPC
+# input. Dependabot has since bumped requirements.txt to pyarrow==25.0.1 and a
+# local `trivy fs` scan no longer flags it; this line is kept only until CI
+# confirms green, and is removed for good in deployment_stages.md Phase 9 when
+# requirements.txt is deleted. Not exploitable regardless: the Streamlit app
+# reads only its own trusted parquet, and requirements.txt is used by neither
+# CI, the API, nor the image.
 CVE-2026-25087
-
-# ---------------------------------------------------------------------------
-# Base-image packaging tooling (python:3.11-slim, /usr/local Python)
-# ---------------------------------------------------------------------------
-# The runtime app runs from /opt/venv; the packages below live in the base
-# image's *system* Python (pip / setuptools / wheel and pip's vendored bundle)
-# and are never invoked by `uvicorn api.main:app`. Proper fix is Phase 1 task 4:
-# digest-pin the base image and strip/upgrade its build tooling in the runtime
-# stage.
-# jaraco.context (setuptools vendor) — path traversal via malicious tar
-CVE-2026-23949
-# msgpack (pip vendor) — out-of-bounds read on Unpacker reuse
-GHSA-6v7p-g79w-8964
-# setuptools PackageIndex — path traversal
-CVE-2025-47273
-# wheel — privilege escalation / code execution via malicious wheel file
-CVE-2026-24049

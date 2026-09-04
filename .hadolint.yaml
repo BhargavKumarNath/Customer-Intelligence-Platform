@@ -1,12 +1,13 @@
 # hadolint config — see .github/workflows/ci.yml `security` job.
-#
-# The ignores below are pre-existing Dockerfile items with a scheduled fix in
-# deployment_stages.md Phase 1 (repo cleanup & hardening). Any OTHER hadolint
-# finding still fails CI.
+# Any hadolint finding not listed below still fails CI.
 ignored:
-  # DL3013 / DL3008: pin pip / apt versions. Handled by Phase 1 — the builder
-  # stage will install from a hash-pinned api-only lockfile and the base image
-  # will be digest-pinned. Tracked as Phase 1 tasks 3 & 4.
+  # DL3013 / DL3008: pin pip / apt versions. The base image is now digest-pinned
+  # (Phase 1 task 4) and the app's own dependencies install from the hash-pinned
+  # requirements.lock, so the reproducibility gap these target is already closed.
+  # The two remaining unpinned installs are `libgomp1` (a single stable Debian
+  # runtime lib) and a `pip/setuptools/wheel` upgrade in the throwaway builder
+  # venv — pinning either to an exact patch would just create churn with no
+  # supply-chain benefit here.
   - DL3013
   - DL3008
   # DL3025: HEALTHCHECK CMD is shell-form on purpose (a one-liner python probe);

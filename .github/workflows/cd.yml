@@ -48,14 +48,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-render:
-    runs-on: ubuntu-latest
-    needs: build-and-push-ghcr
-    # Skipped until the one-time Render setup is done - see docs/DEPLOYMENT.md.
-    # Render auto-builds straight from this repo's Dockerfile once connected; this
-    # step just calls its Deploy Hook so the deploy only fires after CI/build succeed,
-    # instead of on every raw push regardless of test status.
-    if: ${{ vars.RENDER_DEPLOY_HOOK_URL != '' }}
-    steps:
-      - name: Trigger Render deploy
-        run: curl -fsS -X POST "${{ vars.RENDER_DEPLOY_HOOK_URL }}"
+# NOTE: this workflow only builds and publishes the image to GHCR. It does not
+# deploy anywhere. The former `deploy-render` job was removed in Phase 1 (task 7):
+# Render is not the target platform. Per DEPLOYMENT_ARCHITECTURE_REVIEW.md (Stack E)
+# the API is an OPTIONAL, off-the-user-path service; if it is ever deployed it goes
+# to Cloud Run via Workload Identity Federation, added in deployment_stages.md
+# Phase 7 (skippable). No `RENDER_DEPLOY_HOOK_URL` variable/secret is used.
