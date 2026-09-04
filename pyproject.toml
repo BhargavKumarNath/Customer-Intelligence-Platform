@@ -14,7 +14,7 @@ license = { text = "MIT" }
 # `pipeline` and `dashboard` extras below.
 dependencies = [
     "duckdb>=1.0,<2.0",
-    "pandas>=2.2,<3.0",
+    "pandas>=2.2,<4.0",
     "lightgbm>=4.3,<5.0",
     "scipy>=1.12",
     "statsmodels>=0.14",

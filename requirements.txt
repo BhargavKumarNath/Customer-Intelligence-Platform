@@ -2,7 +2,7 @@
 streamlit==1.62.0
 duckdb==0.10.2
 polars==0.20.10
-pandas==2.2.0
+pandas==3.0.5
 pyarrow==25.0.1
 plotly==5.19.0
 scikit-learn==1.9.0
