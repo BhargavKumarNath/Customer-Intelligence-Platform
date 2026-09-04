@@ -25,7 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 dashboard = [
     "streamlit>=1.32,<2.0",
-    "plotly>=5.19,<6.0",
+    "plotly>=5.19,<8.0",
 ]
 # Offline Hydra pipeline scripts (src/ingestion, src/processing, src/models/train_propensity.py,
 # summarise/, scripts/) - never installed in the API container.
