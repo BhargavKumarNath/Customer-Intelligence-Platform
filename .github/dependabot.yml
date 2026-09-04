@@ -1,7 +1,12 @@
 version: 2
 updates:
-  # Python deps declared in pyproject.toml (version specifiers). The hash-pinned
+  # Python deps declared in pyproject.toml + requirements.txt. The hash-pinned
   # requirements.lock is regenerated manually with `uv pip compile` after a bump.
+  #
+  # Major bumps are ignored for now: the project is mid-migration, several deps
+  # are pinned below a known ceiling on purpose (pandas <3, plotly <6, polars <2,
+  # scikit-learn <2), and plotly/streamlit go away entirely in Phase 9. Security
+  # fixes still come through as minor/patch PRs. Revisit these ignores per-phase.
   - package-ecosystem: pip
     directory: "/"
     schedule:
@@ -10,6 +15,9 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions referenced by .github/workflows/*. Keeps `uses:` current and
   # is the safety net that would have surfaced the DuckDB/mypy break as a PR.
@@ -21,8 +29,15 @@ updates:
       actions-all:
         patterns: ["*"]
 
-  # Dockerfile base image (python:3.11-slim).
+  # Dockerfile base image. pyproject requires-python is ">=3.11,<3.14", so only
+  # patch bumps of the 3.11 line are wanted here (e.g. a new slim rebuild);
+  # 3.12/3.13/3.14 bumps would break the build until the Dockerfile + pyproject
+  # are updated deliberately (Phase 1 task 4).
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "python"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
