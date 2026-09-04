@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 RUN python -m venv /opt/venv
@@ -18,7 +18,7 @@ COPY scripts/create_cloud_database.py ./scripts/create_cloud_database.py
 COPY data/sample/sample_optimized.parquet ./data/sample/sample_optimized.parquet
 RUN python scripts/create_cloud_database.py
 
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # libgomp1: LightGBM's compiled extension dynamically loads libgomp.so.1 (GNU OpenMP)
 # at import time, which python:3.11-slim doesn't ship by default.
