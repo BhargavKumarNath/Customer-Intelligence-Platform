@@ -10,22 +10,28 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: "3.11"
+permissions:
+  contents: read
 
 jobs:
-  lint-and-test:
+  # --------------------------------------------------------------------------
+  # Static analysis — no database, no Docker. Fast fail.
+  # --------------------------------------------------------------------------
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version-file: ".python-version"
           cache: "pip"
+          cache-dependency-path: requirements.lock
 
-      - name: Install dependencies
-        run: pip install -e ".[api,dev]"
+      - name: Install (locked, hash-checked)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -e . --no-deps
 
       - name: Ruff lint
         run: >
@@ -41,18 +47,55 @@ jobs:
           src/processing/dimensional_model.py
           api tests
 
-      - name: mypy
+      - name: mypy (strict)
         run: >
           mypy
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
           src/processing/dimensional_model.py
           api
 
+  # --------------------------------------------------------------------------
+  # Tests + coverage gate. Rebuilds the derived DuckDB (cached on its inputs).
+  # --------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+          cache-dependency-path: requirements.lock
+
+      - name: Install (locked, hash-checked)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -e . --no-deps
+
+      - name: Cache derived sample.duckdb
+        id: duckdb-cache
+        uses: actions/cache@v4
+        with:
+          path: data/sample/sample.duckdb
+          key: >-
+            duckdb-${{ hashFiles(
+              'data/sample/sample_optimized.parquet',
+              'src/processing/dimensional_model.py',
+              'scripts/create_cloud_database.py'
+            ) }}
+
       - name: Rebuild sample.duckdb from the tracked parquet
+        if: steps.duckdb-cache.outputs.cache-hit != 'true'
         run: python scripts/create_cloud_database.py
 
-      - name: pytest
-        run: pytest -q
+      - name: pytest + coverage gate
+        run: >
+          pytest -q
+          --cov=src/services --cov=src/db --cov=src/config --cov=src/domain
+          --cov=src/processing/dimensional_model --cov=src/analysis/ab_testing --cov=api
+          --cov-report=term-missing:skip-covered
+          --cov-fail-under=90
 
       - name: Generate data-drift report
         run: python scripts/generate_drift_report.py
@@ -64,9 +107,59 @@ jobs:
           path: outputs/drift_report.html
           retention-days: 30
 
+  # --------------------------------------------------------------------------
+  # Supply-chain / SAST. Uses official tool images so the pipeline itself
+  # pulls no third-party Actions for security scanning.
+  # --------------------------------------------------------------------------
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+          cache-dependency-path: requirements.lock
+
+      - name: Install (locked, hash-checked)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -e . --no-deps
+
+      - name: pip-audit (dependency CVEs)
+        # PYSEC-2026-3740: NLTK model-path sandbox bypass, no fix released. nltk is a
+        # transitive dep of `evidently` (dev/CI drift report only) - it is NOT in the
+        # `.[api]` runtime set and never ships in the image. Re-review when a fix lands.
+        run: pip-audit -r requirements.lock --ignore-vuln PYSEC-2026-3740
+
+      - name: bandit (Python SAST, deployment modules)
+        # Gate on medium+ severity AND high confidence. The one such finding
+        # (pickle.load of our own model artifact) carries an inline `# nosec B301`
+        # with a Phase-3 removal note.
+        run: >
+          bandit -q -r
+          api src/services src/db.py src/config.py src/domain
+          src/analysis/ab_testing.py src/processing/dimensional_model.py
+          --severity-level medium --confidence-level high
+
+      - name: hadolint (Dockerfile lint)
+        run: >
+          docker run --rm -i -v "$PWD/.hadolint.yaml:/.config/hadolint.yaml"
+          hadolint/hadolint hadolint - < Dockerfile
+
+      - name: Trivy filesystem scan
+        run: >
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest
+          fs --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed
+          --scanners vuln --ignorefile /src/.trivyignore /src
+
+  # --------------------------------------------------------------------------
+  # Image builds and is scanned. Only after lint + tests are green.
+  # --------------------------------------------------------------------------
   docker-build:
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +170,26 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: cip-api:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trivy image scan
+        run: >
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -v "$PWD/.trivyignore:/.trivyignore"
+          aquasec/trivy:latest
+          image --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed
+          --scanners vuln --ignorefile /.trivyignore cip-api:ci
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --rm -p 8000:8000 --name cip-ci cip-api:ci
+          for _ in $(seq 1 30); do
+            curl -fsS localhost:8000/healthz && break || sleep 1
+          done
+          curl -fsS localhost:8000/healthz | grep -q ok
+          curl -fsS localhost:8000/ready   | grep -q ready
+          docker stop cip-ci

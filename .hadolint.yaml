@@ -1,0 +1,17 @@
+# hadolint config — see .github/workflows/ci.yml `security` job.
+#
+# The ignores below are pre-existing Dockerfile items with a scheduled fix in
+# deployment_stages.md Phase 1 (repo cleanup & hardening). Any OTHER hadolint
+# finding still fails CI.
+ignored:
+  # DL3013 / DL3008: pin pip / apt versions. Handled by Phase 1 — the builder
+  # stage will install from a hash-pinned api-only lockfile and the base image
+  # will be digest-pinned. Tracked as Phase 1 tasks 3 & 4.
+  - DL3013
+  - DL3008
+  # DL3025: HEALTHCHECK CMD is shell-form on purpose (a one-liner python probe);
+  # the container's own CMD already uses JSON exec form.
+  - DL3025
+  # DL3066: `useradd --system` without an explicit numeric UID. Cosmetic here
+  # (single-tenant image, non-root is what matters); revisit with the digest pin.
+  - DL3066

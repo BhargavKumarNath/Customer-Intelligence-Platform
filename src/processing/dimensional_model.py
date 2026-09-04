@@ -14,7 +14,23 @@ This module is now the single source of truth for that SQL. Callers must
 have already created an `events` table on the given connection.
 """
 
+import logging
+
 import duckdb
+
+
+def _count(con: duckdb.DuckDBPyConnection, table: str) -> int:
+    """Return ``SELECT COUNT(*) FROM <table>`` as a plain int.
+
+    DuckDB's typed ``fetchone()`` is ``tuple[Any, ...] | None``; a bare
+    ``.fetchone()[0]`` trips mypy --strict on both the ``None`` case and the
+    ``Any`` return. COUNT(*) always yields exactly one row, so ``None`` here
+    would mean the query itself failed.
+    """
+    row = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+    if row is None:  # pragma: no cover - COUNT(*) cannot return zero rows
+        raise RuntimeError(f"COUNT(*) returned no row for table {table!r}")
+    return int(row[0])
 
 
 def build_dim_products(con: duckdb.DuckDBPyConnection) -> int:
@@ -30,7 +46,7 @@ def build_dim_products(con: duckdb.DuckDBPyConnection) -> int:
         WHERE product_id IS NOT NULL
         ORDER BY product_id, event_time DESC
     """)
-    return con.execute("SELECT COUNT(*) FROM dim_products").fetchone()[0]
+    return _count(con, "dim_products")
 
 
 def build_dim_users(con: duckdb.DuckDBPyConnection) -> int:
@@ -48,7 +64,7 @@ def build_dim_users(con: duckdb.DuckDBPyConnection) -> int:
         FROM events
         GROUP BY user_id
     """)
-    return con.execute("SELECT COUNT(*) FROM dim_users").fetchone()[0]
+    return _count(con, "dim_users")
 
 
 def build_fact_sessions(con: duckdb.DuckDBPyConnection) -> int:
@@ -67,7 +83,7 @@ def build_fact_sessions(con: duckdb.DuckDBPyConnection) -> int:
         FROM events
         GROUP BY user_session, user_id
     """)
-    return con.execute("SELECT COUNT(*) FROM fact_sessions").fetchone()[0]
+    return _count(con, "fact_sessions")
 
 
 def build_fact_daily_kpis(con: duckdb.DuckDBPyConnection) -> int:
@@ -86,7 +102,7 @@ def build_fact_daily_kpis(con: duckdb.DuckDBPyConnection) -> int:
         GROUP BY CAST(event_time AS DATE)
         ORDER BY date
     """)
-    return con.execute("SELECT COUNT(*) FROM fact_daily_kpis").fetchone()[0]
+    return _count(con, "fact_daily_kpis")
 
 
 def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
@@ -148,7 +164,7 @@ def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
             END as segment
         FROM rfm_scores
     """)
-    return con.execute("SELECT COUNT(*) FROM user_rfm_segments").fetchone()[0]
+    return _count(con, "user_rfm_segments")
 
 
 def build_product_affinity(
@@ -197,7 +213,7 @@ def build_product_affinity(
         WHERE (pp.pair_count * 1.0 / pa.session_count) / (pb.session_count * 1.0 / ts.total) > {min_lift}
         ORDER BY lift DESC
     """)
-    return con.execute("SELECT COUNT(*) FROM predictions_product_affinity").fetchone()[0]
+    return _count(con, "predictions_product_affinity")
 
 
 def build_weekly_retention(con: duckdb.DuckDBPyConnection) -> int:
@@ -236,12 +252,14 @@ def build_weekly_retention(con: duckdb.DuckDBPyConnection) -> int:
         GROUP BY 1, 2, 3
         ORDER BY 1, 3
     """)
-    return con.execute("SELECT COUNT(*) FROM weekly_retention").fetchone()[0]
+    return _count(con, "weekly_retention")
 
 
-def build_all(con: duckdb.DuckDBPyConnection, logger=None) -> dict:
+def build_all(
+    con: duckdb.DuckDBPyConnection, logger: logging.Logger | None = None
+) -> dict[str, int]:
     """Build the full star schema + ML prediction tables on top of an existing `events` table."""
-    counts = {}
+    counts: dict[str, int] = {}
     steps = [
         ("dim_products", build_dim_products),
         ("dim_users", build_dim_users),

@@ -55,7 +55,10 @@ _FEATURE_ORDER = [
 
 def load_model(model_path: Path) -> Booster:
     with model_path.open("rb") as f:
-        return pickle.load(f)  # type: ignore[no-any-return]
+        # Loads only the repo's own checked-in propensity_lgbm.pkl, baked into the image
+        # at build time - never a caller-supplied path. Phase 3 replaces this with
+        # lightgbm's native Booster(model_file=...) / booster.save_model().
+        return pickle.load(f)  # type: ignore[no-any-return]  # nosec B301
 
 
 class PropensityService:

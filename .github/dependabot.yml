@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Python deps declared in pyproject.toml (version specifiers). The hash-pinned
+  # requirements.lock is regenerated manually with `uv pip compile` after a bump.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions referenced by .github/workflows/*. Keeps `uses:` current and
+  # is the safety net that would have surfaced the DuckDB/mypy break as a PR.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions-all:
+        patterns: ["*"]
+
+  # Dockerfile base image (python:3.11-slim).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
