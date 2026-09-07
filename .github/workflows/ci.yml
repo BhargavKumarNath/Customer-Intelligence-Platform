@@ -38,6 +38,7 @@ jobs:
           ruff check
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
           src/processing/dimensional_model.py
+          scripts/build_static_artifacts.py
           api tests
 
       - name: Ruff format check
@@ -45,6 +46,7 @@ jobs:
           ruff format --check
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
           src/processing/dimensional_model.py
+          scripts/build_static_artifacts.py
           api tests
 
       - name: mypy (strict)
@@ -52,6 +54,7 @@ jobs:
           mypy
           src/config.py src/db.py src/domain src/services src/analysis/ab_testing.py
           src/processing/dimensional_model.py
+          scripts/build_static_artifacts.py
           api
 
   # --------------------------------------------------------------------------
@@ -153,6 +156,48 @@ jobs:
           docker run --rm -v "$PWD:/src" aquasec/trivy:latest
           fs --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed
           --scanners vuln --ignorefile /src/.trivyignore /src
+
+  # --------------------------------------------------------------------------
+  # Phase 2 — build the static precompute artifacts and prove byte-parity with
+  # the service layer. Runs the real CLI (produces the uploadable set) and then
+  # the parity/determinism tests. Publishing dist/data/<sha>/ to the Release/R2
+  # location is an owner-infra step (credentials + bucket) tracked in
+  # deployment_stages.md as Phase 2 task 3 "publish" - non-gating for Phases 3-5.
+  # --------------------------------------------------------------------------
+  precompute-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+          cache-dependency-path: requirements.lock
+
+      - name: Install (locked, hash-checked)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -e . --no-deps
+
+      - name: Build static artifacts
+        run: python scripts/build_static_artifacts.py --out dist/data
+
+      - name: Summarise the artifact set
+        run: |
+          SHA_DIR="dist/data/${GITHUB_SHA}"
+          ls -l "$SHA_DIR"
+          sha256sum "$SHA_DIR"/*.json
+
+      - name: Parity + determinism tests
+        run: pytest -q tests/precompute
+
+      - name: Upload artifact set
+        uses: actions/upload-artifact@v7
+        with:
+          name: static-data-${{ github.sha }}
+          path: dist/data/${{ github.sha }}/
+          retention-days: 14
 
   # --------------------------------------------------------------------------
   # Image builds and is scanned. Only after lint + tests are green.

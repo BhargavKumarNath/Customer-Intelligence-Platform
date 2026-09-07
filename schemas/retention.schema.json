@@ -1,0 +1,45 @@
+{
+  "$defs": {
+    "WeeklyRetentionRow": {
+      "description": "One cell of the `weekly_retention` cohort grid.",
+      "properties": {
+        "active_users": {
+          "title": "Active Users",
+          "type": "integer"
+        },
+        "cohort_size": {
+          "title": "Cohort Size",
+          "type": "integer"
+        },
+        "cohort_week": {
+          "description": "ISO-8601 date of the Monday the cohort's week starts",
+          "title": "Cohort Week",
+          "type": "string"
+        },
+        "retention_rate": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Retention Rate",
+          "type": "number"
+        },
+        "weeks_since_first": {
+          "title": "Weeks Since First",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cohort_week",
+        "cohort_size",
+        "weeks_since_first",
+        "active_users",
+        "retention_rate"
+      ],
+      "title": "WeeklyRetentionRow",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/WeeklyRetentionRow"
+  },
+  "type": "array"
+}

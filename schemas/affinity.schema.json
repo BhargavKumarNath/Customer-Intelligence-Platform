@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "AffinityPair": {
+      "description": "One row of `predictions_product_affinity` (product_a < product_b).",
+      "properties": {
+        "confidence": {
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "lift": {
+          "minimum": 0.0,
+          "title": "Lift",
+          "type": "number"
+        },
+        "pair_count": {
+          "title": "Pair Count",
+          "type": "integer"
+        },
+        "product_a": {
+          "title": "Product A",
+          "type": "integer"
+        },
+        "product_b": {
+          "title": "Product B",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "product_a",
+        "product_b",
+        "pair_count",
+        "confidence",
+        "lift"
+      ],
+      "title": "AffinityPair",
+      "type": "object"
+    },
+    "ProductRecommendation": {
+      "properties": {
+        "confidence": {
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "lift": {
+          "description": "Association strength; >1 means a positive affinity",
+          "minimum": 0.0,
+          "title": "Lift",
+          "type": "number"
+        },
+        "pair_count": {
+          "description": "Number of sessions both products were purchased in",
+          "title": "Pair Count",
+          "type": "integer"
+        },
+        "product_id": {
+          "description": "The recommended (co-purchased) product",
+          "title": "Product Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "product_id",
+        "pair_count",
+        "confidence",
+        "lift"
+      ],
+      "title": "ProductRecommendation",
+      "type": "object"
+    }
+  },
+  "description": "`affinity.json`: the raw pairs plus a both-direction lookup whose values\nmatch `RecommendationService.get_recommendations(product_id, 50)` element for\nelement (same ordering: lift descending).",
+  "properties": {
+    "by_product": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/ProductRecommendation"
+        },
+        "type": "array"
+      },
+      "title": "By Product",
+      "type": "object"
+    },
+    "pairs": {
+      "items": {
+        "$ref": "#/$defs/AffinityPair"
+      },
+      "title": "Pairs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "pairs",
+    "by_product"
+  ],
+  "title": "AffinityFile",
+  "type": "object"
+}

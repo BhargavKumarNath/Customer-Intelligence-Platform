@@ -8,6 +8,13 @@
 
 FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS builder
 
+# libgomp1: LightGBM loads libgomp.so.1 at import. Only create_cloud_database.py
+# runs during the image build (no LightGBM), but the builder stage doubles as the
+# Phase 2 reproducible-precompute env, which does score the propensity model.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -21,6 +28,10 @@ RUN pip install --no-cache-dir --no-compile ".[api]"
 # sample.duckdb is a derived build artifact (~100MB, not committed - see .gitignore)
 # rebuilt here from the tracked sample_optimized.parquet, exactly like local dev does.
 COPY scripts/create_cloud_database.py ./scripts/create_cloud_database.py
+# build_static_artifacts.py is not run during the image build; it is copied so the
+# builder stage can double as the Phase 2 reproducible-precompute env (Appendix A.2:
+#   docker build --target builder ... && docker run ... python scripts/build_static_artifacts.py)
+COPY scripts/build_static_artifacts.py ./scripts/build_static_artifacts.py
 COPY data/sample/sample_optimized.parquet ./data/sample/sample_optimized.parquet
 RUN python scripts/create_cloud_database.py
 

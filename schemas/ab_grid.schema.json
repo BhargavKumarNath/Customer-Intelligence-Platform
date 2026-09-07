@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "ABGridCell": {
+      "description": "One precomputed A/B simulation: an `ABTestResult` plus the request knobs\nthat produced it, so the parity test can rebuild the `ABTestRequest`.\n\n`statistical_power` is `None` when statsmodels' solver returns NaN (large lift\nover a large population saturates power at 1.0 and the root-finder fails); in\nthat case `power_undefined` is `True`. See deployment_stages.md P2-NEW-3.",
+      "properties": {
+        "ci_95_lower": {
+          "title": "Ci 95 Lower",
+          "type": "number"
+        },
+        "ci_95_upper": {
+          "title": "Ci 95 Upper",
+          "type": "number"
+        },
+        "confidence_level": {
+          "title": "Confidence Level",
+          "type": "number"
+        },
+        "control_conversion_rate": {
+          "title": "Control Conversion Rate",
+          "type": "number"
+        },
+        "control_visitors": {
+          "title": "Control Visitors",
+          "type": "integer"
+        },
+        "is_significant": {
+          "title": "Is Significant",
+          "type": "boolean"
+        },
+        "lift": {
+          "title": "Lift",
+          "type": "number"
+        },
+        "p_value": {
+          "title": "P Value",
+          "type": "number"
+        },
+        "power_undefined": {
+          "title": "Power Undefined",
+          "type": "boolean"
+        },
+        "relative_lift": {
+          "title": "Relative Lift",
+          "type": "number"
+        },
+        "segment": {
+          "title": "Segment",
+          "type": "string"
+        },
+        "statistical_power": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Statistical Power"
+        },
+        "treatment_conversion_rate": {
+          "title": "Treatment Conversion Rate",
+          "type": "number"
+        },
+        "treatment_visitors": {
+          "title": "Treatment Visitors",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "segment",
+        "lift",
+        "confidence_level",
+        "control_visitors",
+        "treatment_visitors",
+        "control_conversion_rate",
+        "treatment_conversion_rate",
+        "relative_lift",
+        "p_value",
+        "is_significant",
+        "ci_95_lower",
+        "ci_95_upper",
+        "statistical_power",
+        "power_undefined"
+      ],
+      "title": "ABGridCell",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/ABGridCell"
+  },
+  "type": "array"
+}

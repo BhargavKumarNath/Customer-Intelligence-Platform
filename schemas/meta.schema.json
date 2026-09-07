@@ -1,0 +1,64 @@
+{
+  "description": "`meta.json`: everything a consumer needs to trust and pin an artifact set.",
+  "properties": {
+    "built_at": {
+      "description": "ISO-8601 UTC timestamp; the only wall-clock in the set",
+      "title": "Built At",
+      "type": "string"
+    },
+    "dataset_rows": {
+      "title": "Dataset Rows",
+      "type": "integer"
+    },
+    "date_range": {
+      "description": "[min_date, max_date]",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Date Range",
+      "type": "array"
+    },
+    "git_sha": {
+      "title": "Git Sha",
+      "type": "string"
+    },
+    "propensity_users": {
+      "description": "users with event_time < 2019-11-01",
+      "title": "Propensity Users",
+      "type": "integer"
+    },
+    "row_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "build_all() return dict, table -> row count",
+      "title": "Row Counts",
+      "type": "object"
+    },
+    "segments": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Segments",
+      "type": "array"
+    },
+    "users": {
+      "title": "Users",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "git_sha",
+    "built_at",
+    "date_range",
+    "dataset_rows",
+    "users",
+    "row_counts",
+    "segments",
+    "propensity_users"
+  ],
+  "title": "ArtifactMeta",
+  "type": "object"
+}

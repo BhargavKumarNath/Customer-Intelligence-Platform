@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "UserSegment": {
+      "properties": {
+        "f_score": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "F Score",
+          "type": "integer"
+        },
+        "frequency": {
+          "description": "Number of distinct days with a purchase",
+          "title": "Frequency",
+          "type": "integer"
+        },
+        "m_score": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "M Score",
+          "type": "integer"
+        },
+        "monetary": {
+          "description": "Total historical spend",
+          "title": "Monetary",
+          "type": "number"
+        },
+        "r_score": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "R Score",
+          "type": "integer"
+        },
+        "recency_days": {
+          "description": "Days since the user's most recent purchase",
+          "title": "Recency Days",
+          "type": "integer"
+        },
+        "rfm_total": {
+          "title": "Rfm Total",
+          "type": "integer"
+        },
+        "segment": {
+          "description": "RFM segment label, e.g. 'Champions', 'At Risk'",
+          "title": "Segment",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_id",
+        "recency_days",
+        "frequency",
+        "monetary",
+        "r_score",
+        "f_score",
+        "m_score",
+        "rfm_total",
+        "segment"
+      ],
+      "title": "UserSegment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/UserSegment"
+  },
+  "type": "object"
+}

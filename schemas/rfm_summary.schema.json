@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "SegmentSummary": {
+      "description": "Per-segment population and aggregate stats, derived from `user_rfm_segments`.",
+      "properties": {
+        "avg_frequency": {
+          "title": "Avg Frequency",
+          "type": "number"
+        },
+        "avg_monetary": {
+          "title": "Avg Monetary",
+          "type": "number"
+        },
+        "avg_recency_days": {
+          "title": "Avg Recency Days",
+          "type": "number"
+        },
+        "avg_rfm_total": {
+          "title": "Avg Rfm Total",
+          "type": "number"
+        },
+        "pct_of_buyers": {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Pct Of Buyers",
+          "type": "number"
+        },
+        "population": {
+          "minimum": 0,
+          "title": "Population",
+          "type": "integer"
+        },
+        "segment": {
+          "title": "Segment",
+          "type": "string"
+        },
+        "total_monetary": {
+          "title": "Total Monetary",
+          "type": "number"
+        }
+      },
+      "required": [
+        "segment",
+        "population",
+        "pct_of_buyers",
+        "avg_recency_days",
+        "avg_frequency",
+        "avg_monetary",
+        "total_monetary",
+        "avg_rfm_total"
+      ],
+      "title": "SegmentSummary",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/SegmentSummary"
+  },
+  "type": "array"
+}

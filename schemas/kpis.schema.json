@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "DailyKpi": {
+      "description": "One row of `fact_daily_kpis`.",
+      "properties": {
+        "carts": {
+          "title": "Carts",
+          "type": "integer"
+        },
+        "daily_events": {
+          "title": "Daily Events",
+          "type": "integer"
+        },
+        "daily_revenue": {
+          "title": "Daily Revenue",
+          "type": "number"
+        },
+        "daily_sessions": {
+          "title": "Daily Sessions",
+          "type": "integer"
+        },
+        "date": {
+          "description": "ISO-8601 calendar date, e.g. '2019-10-01'",
+          "title": "Date",
+          "type": "string"
+        },
+        "dau": {
+          "title": "Dau",
+          "type": "integer"
+        },
+        "purchases": {
+          "title": "Purchases",
+          "type": "integer"
+        },
+        "views": {
+          "title": "Views",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "date",
+        "daily_events",
+        "dau",
+        "daily_sessions",
+        "views",
+        "carts",
+        "purchases",
+        "daily_revenue"
+      ],
+      "title": "DailyKpi",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/DailyKpi"
+  },
+  "type": "array"
+}

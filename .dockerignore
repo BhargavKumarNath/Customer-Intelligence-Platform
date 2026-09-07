@@ -21,10 +21,12 @@ analysis_subsets/
 summarise/
 tests/
 
-# scripts/ only holds one-off pipeline scripts, EXCEPT create_cloud_database.py,
-# which the builder stage runs to derive sample.duckdb from the tracked parquet.
+# scripts/ only holds one-off pipeline scripts, EXCEPT the two the builder stage
+# runs: create_cloud_database.py (derives sample.duckdb) and
+# build_static_artifacts.py (Phase 2 reproducible precompute — Appendix A.2).
 scripts/*
 !scripts/create_cloud_database.py
+!scripts/build_static_artifacts.py
 
 data/raw/
 data/db/
