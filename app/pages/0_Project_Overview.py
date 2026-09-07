@@ -13,7 +13,7 @@ st.title("🎯 Customer Intelligence Platform - Project Overview")
 # Hero Section
 st.markdown("""
 This platform demonstrates an **end to end production grade data science pipeline** processing **109 Million e-commerce events** 
-on a **single 16GB RAM machine** showcasing optimization techniques, analytical rigor, and ML insights typically 
+within a **3 GB DuckDB memory budget** on a single machine, showcasing optimization techniques, analytical rigor, and ML insights typically 
 found in FAANG companies.
 """)
 
@@ -29,11 +29,11 @@ with col1:
 
 with col2:
     st.metric(
-        "Memory Footprint",
-        "3.7 GB",
-        delta="-97%",
+        "Optimised Parquet",
+        "1.82 GB",
+        delta="-87%",
         delta_color="inverse",
-        help="Optimized from ~120GB naive approach"
+        help="On disk, from the 13.7 GB raw CSV (a naive pandas load would need ~40 GB RAM)"
     )
 
 with col3:
@@ -46,9 +46,8 @@ with col3:
 with col4:
     st.metric(
         "ML Lift",
-        "4.5x",
-        delta="+350%",
-        help="Propensity model vs random targeting"
+        "4.6x",
+        help="Top-5% propensity cohort vs baseline (full-data model; see src/models/metrics.json)"
     )
 
 st.markdown("---")
@@ -113,8 +112,8 @@ The platform follows a modern data science pipeline with optimization at every l
 
 **Data Provenance:**
 - **Original Dataset:** [Kaggle - eCommerce Behavior Data (2019-Oct/Nov)](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store)
-- **Size Challenge:** The full dataset is too large to process on a single 16GB RAM machine
-- **Preprocessing Strategy:** Clever sampling and optimization techniques applied in the [`summarise`](https://github.com/BhargavKumarNath/Customer-Intelligence-Platform/tree/main/summarise) folder reduce the dataset to a manageable size while preserving statistical properties
+- **Scale:** 109,950,743 rows / 13.7 GB of CSV (Oct + Nov 2019)
+- **Ingestion Strategy:** `summarise/optimize_dataset.py` streams both raw CSVs through DuckDB in one bounded-memory pass, downcasts numeric types, and writes a 1.82 GB ZSTD Parquet. The full pipeline then runs on that within a 3 GB DuckDB memory budget (no sampling) — see the Optimization Engine page.
 """)
 
 # Display the SVG diagram
@@ -127,8 +126,8 @@ else:
     # Fallback to simplified text description if SVG not found
     st.info("""
     **Pipeline Flow:**
-    1. Raw CSV (120GB) → Optimized Parquet (3.7GB) via Polars + Type Optimization
-    2. Parquet → DuckDB (10GB memory limit) with ZSTD compression
+    1. Raw CSV (13.7GB) → Optimized Parquet (1.82GB) via a streaming DuckDB COPY + type downcast
+    2. Parquet → DuckDB (3GB memory limit, disk spill on)
     3. DuckDB → Star Schema (dim_users, dim_products, fact_sessions, fact_daily_kpis)
     4. Feature Engineering → RFM Analysis, LightGBM Propensity Model, Market Basket Analysis
     5. All outputs → Streamlit Dashboard with 4 modules
@@ -143,7 +142,7 @@ st.header("💪 The Challenge")
 st.markdown("""
 **Problem:** Analyze 109 million e-commerce events with the following constraints:
 
-- **Hardware:** Single machine with 16GB RAM (no cluster/cloud infrastructure)
+- **Hardware:** Single machine, full run done within a 3 GB DuckDB memory budget (no cluster/cloud infrastructure)
 - **Performance:** Interactive dashboard with sub-second query response
 - **Scale:** Process billions of potential product pairs for recommendations
 - **Complexity:** Multi-dimensional analysis (user segments, cohorts, propensity scoring, A/B testing)
@@ -154,7 +153,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.error("#### ❌ Naive Approach Would Fail")
     st.markdown("""
-    - **Pandas DataFrame:** 120GB+ in memory (OOM)
+    - **Pandas DataFrame:** ~40 GB in memory (OOM on the target box)
     - **Default data types:** Int64, Float64, String (8-16 bytes/value)
     - **PySpark overhead:** Cluster required, slow on single node
     - **No optimization:** Full scans, repeated computations
@@ -195,7 +194,7 @@ with tab1:
             "90% memory reduction",
             "70% storage reduction",
             "10x faster joins",
-            "Stable processing on 16GB RAM"
+            "Stable processing within a 3 GB memory budget"
         ],
         "Tool": [
             "Polars",
@@ -246,7 +245,7 @@ with tab3:
         - **Objective:** Predict November purchases from October behavior
         - **Model:** Gradient Boosted Trees
         - **Features:** Recency, session count, cart events, purchase history
-        - **Performance:** 4.5x lift vs random targeting
+        - **Performance:** 4.6x lift vs random targeting
         - **Application:** Targeted marketing to top 5% high-propensity users
         """)
     
@@ -254,7 +253,7 @@ with tab3:
         st.markdown("**🛒 Recommendation Engine (Market Basket)**")
         st.markdown("""
         - **Algorithm:** Association Rules (Lift-based)
-        - **Scale:** Computed 10M+ product pairs in 90 seconds
+        - **Scale:** Computed 7,704 product-pair rules in ~7 seconds
         - **Metric:** Lift > 1.2 (positive correlation threshold)
         - **Application:** "Customers who bought A also bought B" suggestions
         """)
@@ -267,7 +266,7 @@ with tab4:
     
     st.success("""
     #### 🏆 Technical Excellence
-    - **Data Engineering:** Processed 109M rows on 16GB RAM (97% memory optimization)
+    - **Data Engineering:** Processed 109.95M rows within a 3 GB memory budget (87% smaller on disk)
     - **Performance:** Sub-second analytical queries via DuckDB OLAP engine
     - **Scalability:** Dimensional modeling enables 10x faster joins
     """)
@@ -275,7 +274,7 @@ with tab4:
     st.info("""
     #### 💡 Business Impact
     - **Segmentation:** Identified 8 distinct user segments with tailored strategies
-    - **ML-Driven Targeting:** 4.5x conversion lift (36% vs 8% baseline)
+    - **ML-Driven Targeting:** 4.6x conversion lift (36.9% vs 8.0% baseline)
     - **Personalization:** Market basket analysis for cross-sell opportunities
     """)
     
@@ -338,7 +337,7 @@ pages_info = {
         "Who our users are and how to retain them",
         "How to run rigorous experiments",
         "AI-driven decision making and personalization",
-        "How we fit 109M rows in 16GB RAM",
+        "How the full 110M-row pipeline runs in a 3 GB memory budget",
         "Understanding the data foundation"
     ]
 }
@@ -375,13 +374,13 @@ with col2:
     - **Propensity modeling:** Temporal split, class imbalance handling
     - **Feature engineering:** Behavioral signals, aggregation patterns
     - **Model evaluation:** AUC-ROC, precision-recall, calibration
-    - **Business impact:** 4.5x lift, ROI quantification
+    - **Business impact:** 4.6x lift, ROI quantification
     """)
     
     st.markdown("#### Production Engineering")
     st.markdown("""
     - **Single-node processing:** No cluster required (cost optimization)
-    - **Memory efficiency:** 97% reduction through smart encoding
+    - **Storage efficiency:** 87% smaller on disk; 3 GB pipeline memory budget
     - **Query performance:** Sub-second latency on 100M+ rows
     - **Code quality:** Modular pipeline, version control, documentation
     """)

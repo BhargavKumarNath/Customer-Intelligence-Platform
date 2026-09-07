@@ -10,21 +10,20 @@ st.title("📈 Executive Performance Overview")
 st.markdown("""
 **Business Performance Dashboard** - Track high-level KPIs, revenue trends, and conversion funnel health across the entire platform.
 
-*This dashboard processes 109M events using DuckDB OLAP engine with a 10GB memory limit, enabling sub-second queries.*
+*This dashboard processes the full 109.95M-row dataset using the DuckDB OLAP engine; the pipeline that builds these tables runs within a 3 GB memory limit, and dashboard queries return in under a second.*
 """)
 
 # Methodology Highlight
-with st.expander("⚡ How We Process 109M Events"):
+with st.expander("⚡ How We Process 109.95M Events"):
     st.markdown("""
-    **Optimization Pipeline:**
-    - **Ingestion:** 3 minutes (CSV → DuckDB with ZSTD compression)
-    - **Dimensional Modeling:** 5 minutes (dim_users, dim_products, fact tables)
-    - **Analytics Processing:** 8 minutes (RFM, retention, features)
-    - **Total End-to-End:** ~16 minutes on 16GB RAM machine
-    
+    **Pipeline timings (10 GB-RAM / 8-core box, ~15 min end-to-end):**
+    - **Ingestion:** ~2 min (2x CSV → 1.82 GB Parquet → DuckDB, streaming)
+    - **Dimensional Modeling:** ~90 s (dim_users, dim_products, fact_daily_kpis) + ~45 s sessionization
+    - **Analytics + features + training:** < 20 s each stage, ~50 s LightGBM
+
     **Key Techniques:**
-    - Categorical encoding (90% memory reduction on UUIDs/strings)
-    - Type optimization (Int32, Float32 instead of 64-bit defaults)
+    - Parquet dictionary encoding + Int32/Float32 downcast (13.7 GB CSV → 1.82 GB)
+    - Every DuckDB session capped at 3 GB `memory_limit` with disk spill (`src/utils/duckdb_env.py`)
     - Star schema with pre-aggregated fact tables
     """)
 
@@ -126,9 +125,9 @@ with col2:
 with col3:
     st.warning("""
     **ML-Driven Targeting ROI**
-    - Propensity model achieves 4.5x lift
-    - Top 5% users: 36% conversion vs 8% baseline
-    - Marketing efficiency gain: +350%
+    - Propensity model achieves 4.6x lift (full-data)
+    - Top 5% users: 36.9% conversion vs 8.0% baseline
+    - See the ML Engine page for live metrics from src/models/metrics.json
     """)
 
 st.caption("📊 All metrics computed from `fact_daily_kpis` and `fact_sessions` tables | Query time: <1 second")

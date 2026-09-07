@@ -5,6 +5,8 @@ import logging
 import time
 import sys
 
+from src.utils.duckdb_env import apply_pragmas
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 if sys.platform == 'win32':
@@ -16,10 +18,14 @@ def create_sessions(cfg: DictConfig):
     db_path = cfg.paths.database
     con = duckdb.connect(db_path)
     
-    # 10GB limit to handle the large GROUP BY on UUIDs
-    con.execute("SET memory_limit='10GB';")
-    con.execute("SET threads TO 4;")
-    
+    # Bounded memory + disk spill for the large GROUP BY on session UUIDs.
+    apply_pragmas(con, db_path=db_path)
+    # This is the single heaviest step in the pipeline: ~23M session groups over
+    # ~110M rows. Cap threads low here so DuckDB keeps fewer parallel partial
+    # hash tables in memory (the aggregate itself is spillable; the thread fan-out
+    # is what pushed RSS past the limit on a 10 GB box).
+    con.execute("SET threads TO 2;")
+
     try:
         start_global = time.time()
         logger.info("Starting Sessionization Pipeline...")
@@ -47,11 +53,15 @@ def create_sessions(cfg: DictConfig):
             BOOL_OR(event_type = 'purchase') as has_purchase,
             
             -- Financials
-            SUM(CASE WHEN event_type = 'purchase' THEN price ELSE 0 END) as session_revenue,
-            
-            -- Content affinity (What category did they spend most time/clicks on?)
-            mode(category_code) as top_category
-            
+            SUM(CASE WHEN event_type = 'purchase' THEN price ELSE 0 END) as session_revenue
+
+            -- NOTE: a `mode(category_code) as top_category` column used to live
+            -- here. `mode()` is a holistic aggregate DuckDB cannot spill, so at
+            -- ~23M session groups it drove RSS to ~8.5 GB and thrashed swap on a
+            -- 10 GB box. Nothing downstream ever read `top_category`
+            -- (features.py / the dashboard only use the flags + duration +
+            -- session_start), so it was dropped rather than worked around.
+
         FROM events
         WHERE user_session IS NOT NULL
         GROUP BY user_session;

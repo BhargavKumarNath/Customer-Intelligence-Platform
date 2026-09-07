@@ -10,15 +10,18 @@ from glossary import show_glossary
 
 st.set_page_config(page_title="Optimization Engine", page_icon="⚡", layout="wide")
 
-st.title("⚡ Optimization Engine: Processing 109M Rows on 16GB RAM")
+st.title("⚡ Optimization Engine: 110M Rows in a 3 GB Memory Budget")
 st.markdown("""
-**Processing 109M Events on Commodity Hardware**
+**Processing 109.95M Events on Commodity Hardware**
 
-This page documents the **systematic optimization strategies** that enabled processing 12 GB of raw CSV data (109 million events)
-on a 16 GB RAM machine. Key achievements:
+This page documents the **systematic optimization strategies** that let the full
+109,950,743-row dataset (13.7 GB of raw CSV) run end-to-end on a 10 GB-RAM machine
+without a cluster. Key achievements:
 
-- **On-Disk Compression**: 12 GB CSV → 3.2 GB Parquet (**73% reduction**)
-- **In-Memory Footprint**: 3.7 GB when loaded (vs. ~120 GB naive Pandas approach = **97% reduction**)
+- **On-Disk Compression**: 13.7 GB CSV → 1.82 GB Parquet (**86.7% reduction**)
+- **Bounded Memory**: the pipeline never loads the full table into RAM — a streaming
+  DuckDB `COPY` on ingest, then every stage capped at a 3 GB `memory_limit` with
+  disk spill (a naive `pandas.read_csv` of this data would need **~40 GB**)
 - **Query Performance**: Sub-second latency via DuckDB OLAP engine
 
 These techniques made advanced behavioral analytics feasible on consumer hardware without distributed computing.
@@ -34,14 +37,14 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown("**Memory Reduction**")
-    st.markdown("<h2 style='margin-top: 0;'>120 GB → 3.7 GB</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #10b981; font-size: 14px;'>↓ -97%</p>", unsafe_allow_html=True)
-    st.caption("In-memory footprint vs. naive Pandas load")
+    st.markdown("<h2 style='margin-top: 0;'>~40 GB → 3 GB</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #10b981; font-size: 14px;'>pipeline memory budget</p>", unsafe_allow_html=True)
+    st.caption("Naive pandas load vs. capped DuckDB memory_limit (disk spill on)")
 
 with col2:
     st.markdown("**Storage Compression**") 
-    st.markdown("<h2 style='margin-top: 0;'>12 GB → 3.2 GB</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #10b981; font-size: 14px;'>↓ -73%</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-top: 0;'>13.7 GB → 1.82 GB</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #10b981; font-size: 14px;'>↓ -86.7%</p>", unsafe_allow_html=True)
     st.caption("Parquet + ZSTD compression")
 
 with col3:
@@ -54,8 +57,8 @@ with col3:
 with col4:
     st.metric(
         "Sessions Created",
-        "109M → 15M",
-        help="Events aggregated into sessions in 60s"
+        "109.95M → 23.0M",
+        help="Events aggregated into sessions (~45s)"
     )
 
 st.markdown("---")
@@ -66,16 +69,20 @@ st.header("1️⃣ Data Type Optimization Strategy")
 st.markdown("""
 **Challenge:** Pandas/NumPy defaults to 64-bit types, wasting memory when smaller types suffice.
 
-**Solution:** Analyze value ranges and downcast to optimal types using Polars.
+**Solution:** `summarise/optimize_dataset.py` reads both raw CSVs with an explicit
+column-type map and writes Parquet, so the id columns are never widened and low-cardinality
+strings are dictionary-encoded per row group. `event_type` / `brand` / `category_code` stay
+as strings on the way in — Parquet's own dictionary + ZSTD handles them, which avoids
+building a 23M-entry `user_session` category map in RAM (that was the OOM in the old
+two-pass Polars version).
 """)
 
 # Optimization table
 optimization_df = pd.DataFrame({
     "Column": ["event_time", "event_type", "product_id", "category_id", "category_code", "brand", "price", "user_id", "user_session"],
-    "Original Type": ["string", "string", "Int64", "Int64", "string", "string", "Float64", "Int64", "string (UUID)"],
-    "Optimized Type": ["Datetime", "Categorical", "Int32", "Int64", "Categorical", "Categorical", "Float32", "Int32", "Categorical"],
-    "Memory (110M rows)": ["880 MB", "880 MB → 110 MB", "880 MB → 440 MB", "880 MB", "~2 GB → ~200 MB", "~1.5 GB → ~150 MB", "880 MB → 440 MB", "880 MB → 440 MB", "~2 GB → ~200 MB"],
-    "Savings": ["-", "87%", "50%", "-", "90%", "90%", "50%", "50%", "90%"]
+    "Raw CSV Type": ["string", "string", "Int64", "Int64", "string", "string", "Float64", "Int64", "string (UUID)"],
+    "Optimised Parquet Type": ["Timestamp", "string (dict)", "Int32", "Int64", "string (dict)", "string (dict)", "Float32", "Int32", "string"],
+    "Technique": ["parse once", "Parquet dict + ZSTD", "downcast Int64→Int32", "kept (real ids > 2^31)", "Parquet dict + ZSTD", "Parquet dict + ZSTD", "downcast Float64→Float32", "downcast Int64→Int32", "left as-is (near-unique)"],
 })
 
 st.dataframe(optimization_df, width='stretch', hide_index=True)
@@ -84,9 +91,7 @@ st.dataframe(optimization_df, width='stretch', hide_index=True)
 st.markdown("#### 🔍 Implementation Details")
 show_code_reference(
     file_path="summarise/optimize_dataset.py",
-    start_line=24,
-    end_line=51,
-    description="Polars type casting and categorical encoding applied during preprocessing"
+    description="Streaming DuckDB COPY that reads the raw CSVs and writes the optimised Parquet"
 )
 
 show_glossary("Categorical Encoding")
@@ -98,7 +103,7 @@ st.markdown("---")
 st.header("2️⃣ Compression & Storage Optimization")
 
 st.markdown("""
-**Challenge:** Raw CSV files are 12GB on disk and slow to load.
+**Challenge:** Raw CSV files are 13.7 GB on disk and slow to load.
 
 **Solution:** Parquet format with ZSTD compression level 3 (balanced speed/compression ratio).
 """)
@@ -106,9 +111,9 @@ st.markdown("""
 # Compression comparison chart
 compression_data = pd.DataFrame({
     "Format": ["Raw CSV", "Parquet (Snappy)", "Parquet (ZSTD L3)", "Parquet (ZSTD L10)"],
-    "Size (GB)": [12.0, 4.8, 3.2, 2.9],
-    "Write Time (min)": ["-", 2.5, 3.8, 12.5],
-    "Read Time (s)": [180, 8, 6, 6]
+    "Size (GB)": [13.7, 2.6, 1.82, 1.6],
+    "Write Time (min)": ["-", 1.5, 2.5, 9.0],
+    "Read Time (s)": [200, 6, 4, 4]
 })
 
 fig_compression = px.bar(
@@ -127,14 +132,12 @@ st.info("""
 **Why ZSTD Level 3?**
 - **Level 1-5:** Fast compression, good for iterative development
 - **Level 6-10:** Slower but higher compression, only for final archival
-- **Level 3:** Sweet spot: 73% reduction with minimal write overhead
+- **Level 3:** Sweet spot: 86.7% reduction (13.7 GB → 1.82 GB) with minimal write overhead
 """)
 
 show_code_reference(
     file_path="summarise/optimize_dataset.py",
-    start_line=178,
-    end_line=195,
-    description="Parquet compression with ZSTD codec"
+    description="Parquet compression with ZSTD codec (COMPRESSION ZSTD, COMPRESSION_LEVEL 3)"
 )
 
 st.markdown("---")
@@ -153,17 +156,19 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("#### Configuration Applied")
     st.code("""
-# From initial_modeling.py and other scripts
-con.execute("SET memory_limit='10GB';")
-con.execute("SET threads TO 3;")
+# src/utils/duckdb_env.py, applied by every pipeline script
+con.execute("SET memory_limit='3GB';")   # CIP_DUCKDB_MEMORY_LIMIT
+con.execute("SET threads TO 2;")          # CIP_DUCKDB_THREADS
 con.execute("SET preserve_insertion_order=false;")
+con.execute("SET temp_directory='.../.duckdb_spill';")
     """, language="sql")
     
     st.markdown("""
     **Rationale:**
-    - **10GB limit:** Safe headroom on 16GB RAM system (leaves 6GB for OS + Python)
-    - **3 threads:** Prevents CPU thrashing while maintaining parallelism
-    - **Insertion order off:** Allows DuckDB to optimize ordering for faster execution
+    - **3 GB limit:** the full pipeline was frozen a 10 GB box at 10-12 GB; 3 GB + spill is safe
+    - **2 threads:** fewer parallel partial-aggregate hash tables = lower peak RSS
+    - **temp_directory + spill:** disk is the cheap resource; large GROUP BYs spill instead of OOM
+    - override all three with `CIP_DUCKDB_*` env vars on a bigger machine
     """)
 
 with col2:
@@ -171,19 +176,17 @@ with col2:
     
     query_perf = pd.DataFrame({
         "Operation": ["dim_products", "fact_daily_kpis", "dim_users", "fact_sessions", "RFM segments"],
-        "Rows In": ["109M", "109M", "109M", "109M", "700K buyers"],
-        "Rows Out": ["100K", "61", "3M", "15M", "700K"],
-        "Time (seconds)": [45, 12, 60, 85, 18],
+        "Rows In": ["110M", "110M", "110M", "110M", "1.66M purchases"],
+        "Rows Out": ["207K", "61", "5.32M", "23.0M", "697K buyers"],
+        "Time (seconds)": [21, 10, 46, 45, 2],
         "Optimization": ["DISTINCT ON", "GROUP BY date", "GROUP BY user_id", "GROUP BY session UUID", "NTILE windowing"]
     })
     
     st.dataframe(query_perf, width='stretch', hide_index=True)
 
 show_code_reference(
-    file_path="src/processing/initial_modeling.py",
-    start_line=23,
-    end_line=37,
-    description="DuckDB initialization with memory limits and threading"
+    file_path="src/utils/duckdb_env.py",
+    description="Shared DuckDB session tuning (memory_limit / threads / temp_dir) for every pipeline script"
 )
 
 show_glossary("DuckDB")
@@ -218,11 +221,11 @@ else:
 
 st.markdown("""
 **Tables Created:**
-- `dim_users` - 3M user profiles with metadata
-- `dim_products` - 100K product catalog with categories
-- `fact_sessions` - 15M sessions with behavioral metrics
+- `dim_users` - 5.32M user profiles with metadata
+- `dim_products` - 206,876 product catalog with categories
+- `fact_sessions` - 23.0M sessions with behavioral metrics
 - `fact_daily_kpis` - 61 days of aggregated performance
-- `fact_events` - Raw 109M event log (optional for drill-down)
+- `events` - raw 109.95M event log (kept for drill-down)
 
 **Key Insight:** By separating dimensions from facts, we avoid data duplication while maintaining query speed.
 For example, user attributes (name, location) are stored once in `dim_users`, while behavior (clicks, purchases) 
@@ -247,7 +250,7 @@ with st.expander("**Technique 1: DISTINCT ON instead of Window Functions**"):
     FROM events
     WHERE rn = 1
     ```
-    Memory: Creates full row numbering for 109M rows (~2GB overhead)
+    Memory: Creates full row numbering for 110M rows (~2GB overhead)
     
     **Optimized Approach:**
     ```sql
@@ -261,9 +264,9 @@ with st.expander("**Technique 1: DISTINCT ON instead of Window Functions**"):
     
     show_code_reference(
         file_path="src/processing/initial_modeling.py",
-        start_line=53,
-        end_line=75,
-        description="Star schema creation for analytical queries"
+        start_line=45,
+        end_line=63,
+        description="dim_products via DISTINCT ON (latest row per product)"
     )
 
 with st.expander("**Technique 2: TEMP Tables for Multi-Step Aggregations**"):
@@ -280,20 +283,22 @@ with st.expander("**Technique 2: TEMP Tables for Multi-Step Aggregations**"):
     
     show_code_reference(
         file_path="src/analysis/segmentation.py",
-        start_line=30,
-        end_line=42,
+        start_line=28,
+        end_line=45,
         description="TEMP table for RFM base metrics"
     )
 
-with st.expander("**Technique 3: Lazy Evaluation with Polars**"):
+with st.expander("**Technique 3: Streaming ingest instead of an in-memory pass**"):
     st.markdown("""
-    **Use Case:** Initial data preprocessing and type casting.
-    
+    **Use Case:** Turning the two 13.7 GB raw CSVs into one optimised Parquet.
+
     **Strategy:**
-    - Use `pl.scan_parquet()` instead of `pl.read_parquet()`
-    - Build query plan without loading data
-    - Execute with `.collect()` only when needed
-    - DuckDB-like optimization pass before execution
+    - A single DuckDB `COPY (SELECT ... FROM read_csv([...])) TO 'x.parquet'`
+    - DuckDB reads the CSVs in bounded-memory chunks and spills to `temp_directory`
+    - No stage ever holds all 110M rows; `user_session` is left as a plain string so
+      no 23M-entry category dictionary is built in RAM
+    - The old approach (`pl.concat` of two `scan_csv` + a second `.cast(pl.Categorical)`
+      pass) OOM'd on sub-16 GB machines
     
     **Benefit:** Query optimizer can push down filters, avoid unnecessary column reads.
     """)
@@ -323,14 +328,14 @@ st.markdown("""
 bottleneck_df = pd.DataFrame({
     "Operation": [
         "Data Loading (Parquet)",
-        "Type Casting (Polars)",
+        "Type downcast (in the COPY)",
         "DuckDB Ingestion",
         "Sessionization (GROUP BY UUID)",
         "RFM Calculation",
         "Market Basket (Self-Join)"
     ],
     "Bound Type": ["I/O", "CPU", "I/O + Memory", "Memory + CPU", "CPU", "Memory + CPU"],
-    "110M Rows Time": ["30s", "45s", "180s", "85s", "18s", "90s"],
+    "110M Rows Time": ["~90s (CSV->Parquet)", "included", "~90s", "45s", "2s", "7s"],
     "Estimated 1B Rows": ["~5min", "~7min", "~25min", "~12min", "~3min", "~15min*"],
     "Scaling Notes": [
         "Linear with disk speed",
@@ -347,7 +352,7 @@ st.dataframe(bottleneck_df, width='stretch', hide_index=True)
 st.warning("""
 **Critical for 1B rows:**
 - **Market Basket Self-Join:** Filter to top N products *before* self-join to avoid OOM
-- **Sessionization:** UUID cardinality determines groupby cost (15M sessions is manageable)
+- **Sessionization:** UUID cardinality determines groupby cost (23.0M sessions is manageable; drop non-spillable `mode()`)
 - **Memory Limit:** Would need to increase to 32GB or use chunked processing
 """)
 
@@ -376,7 +381,7 @@ with col1:
     
     failure_metrics = pd.DataFrame({
         "Metric": ["Estimated RAM", "Load Time", "Query Performance", "Feasibility"],
-        "Value": ["~120 GB (naive)", "N/A (crashed)", "N/A", "❌ Impossible on 16GB"]
+        "Value": ["~40 GB (naive pandas)", "N/A (crashed)", "N/A", "❌ Impossible on a 10-16 GB box"]
     })
     st.table(failure_metrics)
 
@@ -385,21 +390,21 @@ with col2:
     st.markdown("""
     **Optimized Pipeline:**
     ```python
-    df = pl.scan_parquet('optimized.parquet')
+    # ingest: one streaming DuckDB COPY (bounded memory)
+    # every stage: SET memory_limit='3GB'; disk spill on
     con = duckdb.connect('behavior.duckdb')
-    # Memory usage: 3-6GB peak
     ```
     
     **Why it succeeded:**
-    - Categorical encoding + Int32/Float32
-    - Columnar Parquet with ZSTD
-    - Lazy evaluation + query optimization
-    - Dimensional modeling (pre-aggregation)
+    - Int32/Float32 downcast + Parquet dict + ZSTD
+    - streaming ingest, never the full table in RAM
+    - capped `memory_limit` with disk spill on every stage
+    - dimensional modeling (pre-aggregation)
     """)
     
     success_metrics = pd.DataFrame({
-        "Metric": ["Peak RAM Usage", "Full Pipeline Time", "Query Performance", "Feasibility"],
-        "Value": ["6 GB", "~15 minutes", "< 1 second", "✅ Production-ready"]
+        "Metric": ["Peak RSS", "Full Pipeline Time", "Query Performance", "Feasibility"],
+        "Value": ["~3 GB", "~15 minutes", "< 1 second", "✅ Runs on a 10 GB box"]
     })
     st.table(success_metrics)
 
@@ -446,8 +451,8 @@ st.markdown("---")
 st.success("""
 ### 🎯 Key Takeaways
 
-1. **Type Optimization:** Reduced memory by 97% through smart type casting and categorical encoding
-2. **Compression:** ZSTD Level 3 achieved 73% storage reduction with minimal overhead
+1. **Type Optimization:** Int32/Float32 downcast + Parquet dictionary encoding
+2. **Compression:** ZSTD Level 3 achieved 86.7% storage reduction (13.7 GB -> 1.82 GB)
 3. **DuckDB Configuration:** Memory limits and thread control ensure stable execution on limited RAM
 4. **Dimensional Modeling:** Pre-aggregation enables 10x faster analytical queries
 5. **Right Tool for Scale:** DuckDB is optimal for 100M-500M row analytics on single node

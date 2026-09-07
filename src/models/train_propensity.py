@@ -4,6 +4,8 @@ from omegaconf import DictConfig
 import logging
 import time
 import sys
+
+from src.utils.duckdb_env import apply_pragmas
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -25,8 +27,8 @@ def train_propensity_model(cfg: DictConfig):
     db_path = cfg.paths.database
     con = duckdb.connect(db_path)
     
-    # Memory safety
-    con.execute("SET memory_limit='10GB';")
+    # Bounded memory + disk spill.
+    apply_pragmas(con, db_path=db_path)
     
     try:
         start_global = time.time()

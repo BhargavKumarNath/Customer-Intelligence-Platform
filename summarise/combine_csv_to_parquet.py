@@ -1,3 +1,7 @@
+"""
+    python summarise/combine_csv_to_parquet.py IN1.csv IN2.csv OUT.parquet
+"""
+
 import sys
 import polars as pl
 

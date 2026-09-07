@@ -1,5 +1,18 @@
+import json
+from pathlib import Path
+
 import streamlit as st
 from db_utils import run_query, format_number, format_currency, is_sample_mode, get_dataset_info
+
+
+def _model_lift() -> str:
+    """Read the real top-5% lift from src/models/metrics.json (written by
+    src/models/train_propensity.py) instead of hardcoding a number here."""
+    try:
+        m = json.loads((Path(__file__).parent.parent / "src" / "models" / "metrics.json").read_text())
+        return f"{m['lift_top5pct']:.1f}x"
+    except Exception:
+        return "n/a"
 
 st.set_page_config(
     page_title="Behavioral Analytics Platform",
@@ -19,7 +32,7 @@ if dataset_info['is_sample']:
     to demonstrate the platform's capabilities within Streamlit Cloud's resource limits.
     
     📥 **For the Complete Experience with Full Analytics:**
-    - Clone the repository and run locally with the complete 109M event dataset
+    - Clone the repository and run locally with the complete 109.95M-row dataset
     - See the **Project Overview** page for detailed setup instructions
     - All optimization techniques, ML models, and features work the same way at any scale
     """)
@@ -52,26 +65,25 @@ with col1:
 
 with col2:
     st.metric(
-        "Memory Footprint",
-        "3.7 GB",
-        delta="-97%",
+        "Optimised Parquet",
+        "1.82 GB",
+        delta="-87%",
         delta_color="inverse",
-        help="Optimized from ~120GB naive approach"
+        help="On disk, from the 13.7 GB raw CSV. Naive pandas load would need ~40 GB RAM."
     )
 
 with col3:
     st.metric(
-        "Query Latency",
-        "< 1 sec",
-        help="Sub-second analytical queries"
+        "Pipeline Memory Budget",
+        "3 GB",
+        help="DuckDB memory_limit for the full 110M-row pipeline (env-tunable, disk spill on)"
     )
 
 with col4:
     st.metric(
         "ML Lift",
-        "4.5x",
-        delta="+350%",
-        help="Propensity model vs random"
+        _model_lift(),
+        help="Top-5% propensity cohort vs population baseline (from src/models/metrics.json)"
     )
 
 with col5:
@@ -96,8 +108,8 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.markdown("""
     **Data Flow:**
-    1. **Ingestion:** 2019-Oct-Nov CSV (12GB) → Optimized Parquet (3.2GB, ZSTD compression)
-    2. **Processing:** DuckDB OLAP engine (10GB memory limit, 3 threads)
+    1. **Ingestion:** 2019-Oct + 2019-Nov CSV (13.7GB) → Optimized Parquet (1.82GB, ZSTD) via streaming DuckDB COPY
+    2. **Processing:** DuckDB OLAP engine (3GB memory limit, 2 threads, disk spill — env-tunable)
     3. **Modeling:** LightGBM (Propensity) + Association Rules (Recommendations)
     4. **Analytics:** Dimensional star schema (users, products, sessions, daily KPIs)
     5. **Visualization:** Interactive Streamlit dashboard with Plotly charts
@@ -127,7 +139,7 @@ with tab1:
     - **Dimensional Modeling:** Star schema optimized for analytical workloads
     - **Query Optimization:** Memory limits, thread control, indexed lookups
     - **Smart Preprocessing:** Categorical encoding, type optimization, compression
-    - **Result:** Process 109M rows on 16GB RAM with sub-second query latency
+    - **Result:** Process 109.95M rows within a 3 GB memory budget, with sub-second query latency
     """)
 
 with tab2:
@@ -147,14 +159,14 @@ with tab3:
     - **Feature Engineering:** Behavioral signals, aggregation patterns
     - **Model Evaluation:** AUC-ROC, precision-recall, calibration
     - **Recommendation Engine:** Market basket analysis with lift metrics
-    - **Result:** 4.5x conversion lift, enabling targeted high-ROI campaigns
+    - **Result:** 4.6x conversion lift, enabling targeted high-ROI campaigns
     """)
 
 with tab4:
     st.markdown("""
     #### Production Engineering
     - **Single-Node Processing:** No cluster required (cost optimization)
-    - **Memory Efficiency:** 97% reduction through smart encoding
+    - **Storage Efficiency:** 87% smaller on disk (13.7 GB CSV → 1.82 GB Parquet); pipeline runs in a 3 GB memory budget
     - **Query Performance:** Sub-second latency on 100M+ rows
     - **Code Quality:** Modular pipeline, version control, comprehensive documentation
     - **Result:** Production-ready analytics at a fraction of typical cloud costs
@@ -201,7 +213,7 @@ st.markdown("---")
 # Footer
 st.info("""
 **💡 Pro Tip:** Start with **Project Overview** for the full story, then check **Data Explorer** to understand the data foundation, 
-followed by **Optimization Engine** to see how we fit 109M rows in 16GB RAM.
+followed by **Optimization Engine** to see how the full 110M-row pipeline runs within a 3 GB memory budget.
 
 *Built with production-grade engineering principles and FAANG-style rigor.*
 """)

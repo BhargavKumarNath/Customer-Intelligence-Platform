@@ -5,6 +5,8 @@ import logging
 import time
 import sys
 
+from src.utils.duckdb_env import apply_pragmas
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 if sys.platform == 'win32':
@@ -16,8 +18,8 @@ def build_recommendations(cfg: DictConfig):
     db_path = cfg.paths.database
     con = duckdb.connect(db_path)
     
-    # Moderate memory usage for self-joins
-    con.execute("SET memory_limit='12GB';")
+    # Bounded memory + disk spill for the market-basket self-join.
+    apply_pragmas(con, db_path=db_path)
     
     try:
         start_global = time.time()

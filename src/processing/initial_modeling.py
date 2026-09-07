@@ -5,14 +5,14 @@ Dimensional model builder for the full-scale, Hydra-driven local pipeline
 
 This intentionally does NOT share `src/processing/dimensional_model.py`.
 That module is the shared builder for the sample/cloud path
-(`scripts/create_cloud_database.py` and `app/db_utils.py`'s cloud mode),
-whose schema evolved separately (e.g. `fact_daily_kpis.daily_events` here is
-`total_events`, and `dim_users` here additionally carries
-`favorite_category_by_recency`). Unifying the two would mean reconciling
-those schema differences and re-verifying every full-scale consumer
-(`src/analysis/segmentation.py`, `retention.py`, `src/models/recommendations.py`),
-which isn't something that can be safely done without the full local dataset
-this path is meant to run against.
+(`scripts/create_cloud_database.py` and `app/db_utils.py`'s cloud mode).
+The two builders still differ (this one adds `dim_users.is_buyer`,
+`favorite_category_by_recency`, and a richer `fact_sessions` via
+`sessionization.py`; the RFM/retention tables here are named `analysis_*`),
+but the overlapping columns are now kept name-compatible so the dashboard can
+read either DB. `scripts/finalize_full_db.py` adds the `user_rfm_segments` /
+`weekly_retention` compatibility views the dashboard's full/local mode needs
+on top of the `analysis_*` tables.
 """
 
 import duckdb
@@ -21,6 +21,8 @@ from omegaconf import DictConfig
 import logging
 import time
 import sys
+
+from src.utils.duckdb_env import apply_pragmas
 
 # Configure logging with UTF-8 for Windows
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -33,11 +35,9 @@ def create_dimensional_models(cfg: DictConfig):
     db_path = cfg.paths.database
     con = duckdb.connect(db_path)
 
-    # Optimisation for 16GB RAM system
-    con.execute("SET memory_limit='10GB';")  
-    con.execute("SET threads TO 3;")  
-    con.execute("SET preserve_insertion_order=false;") 
-    logger.info(" Memory: 10GB, Threads: 3, Insertion order: disabled")
+    # Bounded memory + disk spill; tunable via CIP_DUCKDB_* env vars.
+    apply_pragmas(con, db_path=db_path)
+    logger.info("DuckDB session tuned (see src/utils/duckdb_env.py)")
 
     try:
         start_global = time.time()
@@ -62,18 +62,23 @@ def create_dimensional_models(cfg: DictConfig):
         logger.info(f" 'dim_products' created in {time.time() - start:.2f}s ({row_count:,} products)")
 
         # 2. CREATE FACT_DAILY_KPIS
+        # Column names kept identical to src/processing/dimensional_model.py's
+        # fact_daily_kpis (daily_events / views / carts / purchases) so the
+        # Streamlit dashboard's full/local mode (app/db_utils.py reads this DB
+        # directly) and its cloud/sample mode (which uses dimensional_model)
+        # query the same schema. They used to diverge (total_events / total_*).
         logger.info(" Creating 'fact_daily_kpis'...")
         query_daily = """
-        CREATE OR REPLACE TABLE fact_daily_kpis AS 
-        SELECT 
+        CREATE OR REPLACE TABLE fact_daily_kpis AS
+        SELECT
             CAST(event_time AS DATE) as date,
-            COUNT(*) as total_events,
+            COUNT(*) as daily_events,
             COUNT(DISTINCT user_id) as dau,
             COUNT(DISTINCT user_session) as daily_sessions,
             SUM(CASE WHEN event_type = 'purchase' THEN price ELSE 0 END) as daily_revenue,
-            SUM(CASE WHEN event_type = 'purchase' THEN 1 ELSE 0 END) as total_purchases,
-            SUM(CASE WHEN event_type = 'cart' THEN 1 ELSE 0 END) as total_carts,
-            SUM(CASE WHEN event_type = 'view' THEN 1 ELSE 0 END) as total_views
+            SUM(CASE WHEN event_type = 'purchase' THEN 1 ELSE 0 END) as purchases,
+            SUM(CASE WHEN event_type = 'cart' THEN 1 ELSE 0 END) as carts,
+            SUM(CASE WHEN event_type = 'view' THEN 1 ELSE 0 END) as views
         FROM events
         GROUP BY 1
         ORDER BY 1;

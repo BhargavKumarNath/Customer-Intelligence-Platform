@@ -34,7 +34,7 @@ GLOSSARY = {
     "Polars": {
         "full": "Polars DataFrame Library",
         "definition": "Lightning-fast DataFrame library written in Rust. Features lazy evaluation and parallel execution.",
-        "application": "Used for data preprocessing and optimization - achieved 97% memory reduction through smart type casting."
+        "application": "Used for dashboard-side data wrangling. The heavy ingest of the 110M-row raw dataset is done by a streaming DuckDB COPY (bounded memory), which shrinks the 13.7 GB CSV to a 1.82 GB Parquet."
     },
     "Lift (A/B Testing)": {
         "full": "Relative Lift",
@@ -59,7 +59,7 @@ GLOSSARY = {
     "Sessionization": {
         "full": "User Session Construction",
         "definition": "Grouping sequential events into logical sessions (visits) based on UUIDs or time-based windowing.",
-        "application": "Converted 109M events into 15M sessions to analyze user journeys and conversion funnels."
+        "application": "Aggregated 109.95M events into 23.0M sessions to analyze user journeys and conversion funnels."
     },
     "Dimensional Modeling": {
         "full": "Star Schema Design",
@@ -79,7 +79,7 @@ GLOSSARY = {
     "Categorical Encoding": {
         "full": "Dictionary/Category Data Type",
         "definition": "Memory-efficient representation of string columns with many repeated values using integer codes + dictionary.",
-        "application": "Reduced UUID columns from ~2GB to ~200MB by storing unique values once and referencing them."
+        "application": "Parquet dictionary-encodes low-cardinality columns (event_type, brand, category_code) per row group; with Int32/Float32 downcasts the 13.7 GB CSV becomes a 1.82 GB Parquet."
     },
 }
 

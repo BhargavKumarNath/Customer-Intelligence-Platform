@@ -4,6 +4,8 @@ from omegaconf import DictConfig
 import logging
 import time
 import sys
+
+from src.utils.duckdb_env import apply_pragmas
 import pandas as pd
 
 # Configure logging
@@ -17,9 +19,8 @@ def calculate_retention(cfg: DictConfig):
     db_path = cfg.paths.database
     con = duckdb.connect(db_path)
 
-    # Moderate settings for analytical queries
-    con.execute("SET memory_limit='10GB';")
-    con.execute("SET threads TO 4;")
+    # Bounded memory + disk spill for the cohort join over the full event log.
+    apply_pragmas(con, db_path=db_path)
 
     try:
         start_global = time.time()

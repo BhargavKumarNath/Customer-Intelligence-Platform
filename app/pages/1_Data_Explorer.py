@@ -479,11 +479,11 @@ st.markdown("---")
 st.success("""
 ### 🎯 Key Insights from Data Exploration
 
-1. **Scale:** 109M events across 61 days from 3M users interacting with 100K products
-2. **Event Mix:** Heavily view-dominated (~68%), with ~8% conversion rate (view → purchase)
-3. **Price Range:** Wide distribution ($1-$5000+), median ~$50, with long tail of premium products
+1. **Scale:** 109.95M events across 61 days (Oct + Nov 2019) from 5.32M users interacting with 206,876 products
+2. **Event Mix:** Overwhelmingly view-dominated (94.9% view, 3.6% cart, 1.5% purchase); 13.1% of users make a purchase, session conversion is 6.1%
+3. **Price Range:** $0–$2,574, mean ~$292, median ~$165 (0.2% of rows have a $0 price)
 4. **User Behavior:** Power law distribution — most users browse lightly, top 1% are super-engaged
-5. **Data Quality:** Good overall completeness; category/brand have ~35-42% nulls (handled gracefully)
+5. **Data Quality:** `event_time` / `event_type` / `price` / ids fully populated; `category_code` 32.2% null, `brand` 13.9% null (coalesced to 'unknown'); 12 rows have a null `user_session`; ~0.12% of rows are exact duplicates
 6. **Temporal Pattern:** Consistent daily activity with some weekly seasonality
 
 **This foundation enables all downstream analytics, segmentation, and ML modeling.**

@@ -8,18 +8,28 @@ dist/
 build/
 
 # LARGE DATA FILES (LOCAL ONLY)
-# Full database (5+ GB)
+# Full DuckDB database (~5.4 GB) + its on-disk spill dir
 data/db/
 data/db/**
 
-# Raw CSV files (12+ GB)
+# Raw Kaggle CSVs (~13.7 GB: data/2019-Oct.csv + data/2019-Nov.csv) and the
+# optimised Parquet built from them (summarise/optimize_dataset.py -> data/raw/).
 data/raw/
 data/raw/**
 *.csv
 
-# Processed intermediate files
+# Processed / pre-aggregated intermediates
 data/processed/
 data/processed/**
+data/analysis_subsets/
+data/analysis_subsets/**
+
+# DuckDB out-of-core spill / temp dirs (src/utils/duckdb_env.py,
+# summarise/optimize_dataset.py). Can appear next to any .duckdb file.
+.duckdb_spill/
+.duckdb_tmp/
+**/.duckdb_spill/
+**/.duckdb_tmp/
 
 # Keep ONLY sample data for cloud (these ARE uploaded)
 !data/sample/
@@ -36,17 +46,23 @@ src/models/*.pth
 *.model
 
 # ...except the checked-in propensity model: it can't be regenerated in CI/Docker
-# (training needs the full 12GB raw dataset), and it's small (~3.4MB).
+# (training needs the full ~13.7GB raw dataset), and it's small (~3.5MB, 998 trees,
+# trained on the full 109.95M-row dataset).
 !src/models/propensity_lgbm.pkl
 
 # Generated Outputs and Logs
 logs/
 logs/**
+logs_pipeline/
+logs_pipeline/**
 outputs/
 outputs/**
 analysis_subsets/
 analysis_subsets/**
 *.log
+
+# Local pipeline-run record (regenerated per full-dataset run; not public repo doc)
+PIPELINE_RUN_REPORT.md
 
 # Python Cache and Bytecode
 __pycache__/

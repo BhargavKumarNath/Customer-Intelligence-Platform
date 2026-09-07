@@ -1,13 +1,15 @@
-﻿# Customer Intelligence Platform
-## From 109M Events to Actionable Business Insights
+# Customer Intelligence Platform
+## From 110M Events to Actionable Business Insights
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![DuckDB](https://img.shields.io/badge/DuckDB-0.10.2-yellow)](https://duckdb.org/)
-[![Polars](https://img.shields.io/badge/Polars-0.20.10-orange)](https://www.pola.rs/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32.0-red)](https://streamlit.io/)
+[![DuckDB](https://img.shields.io/badge/DuckDB-%E2%89%A51.0-yellow)](https://duckdb.org/)
+[![Polars](https://img.shields.io/badge/Polars-%E2%89%A51.0-orange)](https://www.pola.rs/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-red)](https://streamlit.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-teal)](https://fastapi.tiangolo.com/)
 
-> **An end-to-end analytics platform that processes 109M e-commerce events on a 16GB RAM laptop, no cloud warehouse required. It surfaces high-value customer segments, scores purchase propensity, and quantifies revenue opportunities.**
+> **An end-to-end analytics platform that processes the full 109.95M-row [eCommerce Behavior Data from a Multi-Category Store](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store) (Oct + Nov 2019) on a single machine, no cloud warehouse required. It surfaces high-value customer segments, scores purchase propensity, and quantifies revenue opportunities.**
+>
+> Every number in this README below is produced from the **full dataset** unless it is explicitly labelled *(sample)*. The full pipeline was run end-to-end on a 10 GB-RAM Linux box within a **3 GB DuckDB memory budget** (see [Computational Considerations](#computational-considerations)).
 
 ---
 
@@ -43,7 +45,7 @@ The biggest trap in e-commerce behavioural modelling is leaking future events in
 To avoid this, the propensity model (`src/models/train_propensity.py`) uses a strict temporal split:
 - **Features**: Built entirely from raw October event counts: total events, sessions, views, carts, cart removals, active span in days, and days since the last October event. (A separate, richer `features_users` table with RFM flags and checkout density exists for other analyses, but it isn't what this model trains on, see the Feature Engineering note below.)
 - **Target**: Whether the user made a purchase in November.
-- **Result**: The reported AUC and top-5% conversion lift reflect genuine out-of-sample performance, not an artefact of the validation methodology. Verified by retraining from scratch on the sample dataset (CPU-only, no GPU, fully deterministic run to run): 0.72 AUC, 4.4x lift (25.7% top-5% conversion vs. a 5.8% baseline).
+- **Result**: The reported AUC and top-5% conversion lift reflect genuine out-of-sample performance, not an artefact of the validation methodology. Retrained from scratch on the **full 109.95M-row dataset** (CPU-only, no GPU, fully deterministic run to run, `deterministic: true` + fixed seeds): **0.754 ROC-AUC**, **4.6x lift** — the top 5% of scored users convert at **36.9%** vs. an **8.0%** November baseline. Trained on 2,417,832 users, evaluated on a held-out 604,458 (all 3,022,290 users with October activity; 20% stratified test split). Numbers are written to `src/models/metrics.json` by the training script and read from there by the dashboard, so they cannot silently drift.
 
 ### 2. A/B Test Simulation Engine
 
@@ -54,7 +56,7 @@ Correlation is easy to find; knowing whether a segment is worth targeting takes 
 
 ### 3. Market Basket Analysis in Pure SQL
 
-Rather than loading millions of cart events into a Python graph library, association rule mining runs entirely inside DuckDB (`src/models/recommendations.py`). Window functions and self-joins handle product support, co-occurrence counts, confidence, and lift, all on disk. This keeps memory usage flat even across 4.5M purchase events.
+Rather than loading purchase events into a Python graph library, association rule mining runs entirely inside DuckDB (`src/models/recommendations.py`). Self-joins and group-bys handle product support, co-occurrence counts, confidence, and lift, all on disk. On the full dataset this processes **1.66M purchase events** and produces **7,704 directed product-pair rules** (≥ 5 co-purchases in the same session, lift > 1.2). Memory stays flat because the self-join is on purchase rows only, not the full 110M-row log.
 
 ---
 
@@ -64,17 +66,20 @@ Rather than loading millions of cart events into a Python graph library, associa
 
 ### 1. Ingestion & Memory Optimisation
 
-- **Raw input**: 12GB CSV, 109M rows, covering Oct-Nov 2019.
+- **Raw input**: `2019-Oct.csv` (5.3 GB, 42.4M rows) + `2019-Nov.csv` (8.4 GB, 67.5M rows) = **13.7 GB / 109,950,743 rows**.
 - **Optimisation script** (`summarise/optimize_dataset.py`):
-    - Uses Polars lazy evaluation (`pl.scan_parquet()`) to process data in streaming chunks rather than loading everything at once, which is what makes it viable on 16GB RAM.
-    - Downcasts numeric types (`Int64` -> `Int32` where safe) and replaces high-cardinality UUID strings with integer-keyed dictionaries. A naive Pandas `read_csv()` on this data requires ~120GB of RAM; after type optimisation the in-memory footprint is ~3.7GB, a **97% reduction**.
-    - Writes to Parquet with ZSTD level-3 compression: the 12GB raw CSV shrinks to **3.2GB on disk** (73% disk reduction), and reads back ~30x faster than CSV.
+    - A single **streaming DuckDB `COPY`** reads both raw CSVs and writes one type-optimised Parquet. DuckDB processes the CSVs in bounded-memory chunks and spills to disk if a step needs more than `memory_limit`, so the pass never has to hold the dataset in RAM. (This replaced an earlier two-pass Polars pipeline whose `.cast(pl.Categorical)` on the 23M-unique `user_session` UUID built a 23M-entry in-memory dictionary and OOM'd sub-16 GB machines.)
+    - Downcasts `product_id` / `user_id` `BIGINT -> INTEGER` and `price` `DOUBLE -> FLOAT`; low-cardinality string columns (`event_type`, `brand`, `category_code`) are dictionary-encoded automatically per Parquet row group.
+    - **Measured**: a naive `pandas.read_csv()` of this data would need **~40 GB** of RAM (extrapolated from a 3M-row sample at 389 bytes/row) — infeasible on the target machine. The optimised Parquet is **1.82 GB on disk**, an **86.7% reduction** from the 13.7 GB CSV, and reads back an order of magnitude faster.
 
 ### 2. Dimensional Modelling & OLAP Layer
 
-- **Database setup** (`scripts/create_cloud_database.py`):
-    - Spins up a DuckDB instance configured for sub-second aggregations over 100M+ rows.
-    - Structures data as a star schema: fact tables (`fact_sessions`, `fact_daily_kpis`) referencing dimension tables (`dim_users`, `dim_products`).
+- **Full-scale build** (`src/ingestion/loader.py` -> `src/processing/` -> `src/analysis/`):
+    - `loader.py` ingests the optimised Parquet into a persistent DuckDB file (`data/db/behavior.duckdb`, ~5.4 GB).
+    - `initial_modeling.py` + `sessionization.py` build the star schema: fact tables (`fact_sessions` — 23.0M rows, `fact_daily_kpis` — 61 days) referencing dimension tables (`dim_users` — 5.32M, `dim_products` — 206,876).
+    - All DuckDB sessions are tuned by `src/utils/duckdb_env.py` (default `memory_limit=3GB`, `threads=2`, disk spill on; override with `CIP_DUCKDB_*` env vars on a bigger machine).
+- **Cloud/sample build** (`scripts/create_cloud_database.py` + `src/processing/dimensional_model.py`):
+    - The same star schema, built from the tracked stratified sample for the Streamlit Cloud deployment and the API image.
 
 ### 3. Feature Engineering & ML
 
@@ -82,9 +87,9 @@ Rather than loading millions of cart events into a Python graph library, associa
     - Builds user-level features in SQL (session aggregates, checkout density, duration variance, RFM flags), all materialised into a `features_users` table. This table backs the A/B test module's segment lookups. It is a separate, richer feature set from what the propensity model below trains on, not a shared input.
 - **Propensity model** (`src/models/train_propensity.py`):
     - Trains a LightGBM classifier on a narrower, purpose-built set of October features (see "Out-of-Time Validation Split" above) with November purchases as the target label. The strict out-of-time split prevents any future data from leaking into training.
-    - The checked-in model (trained on the sample dataset, deterministic seed) achieves **0.72 ROC-AUC** on the held-out November period; the top 5% of scored users convert at **4.4x the baseline rate**.
+    - The checked-in model is **trained on the full 109.95M-row dataset** (deterministic seeds): **0.754 ROC-AUC** on the held-out November period; the top 5% of scored users convert at **4.6x the baseline rate**. It's checked in because CI/Docker can't retrain it (needs the 14 GB raw dataset). Full metrics: `src/models/metrics.json`.
 - **Recommendations** (`src/models/recommendations.py`):
-    - Runs market basket analysis through DuckDB to produce a `predictions_product_affinity` table of cross-sell candidates.
+    - Runs market basket analysis through DuckDB to produce a `predictions_product_affinity` table of cross-sell candidates (7,704 directed rules on the full data).
 
 ---
 
@@ -121,17 +126,80 @@ CI (`.github/workflows/ci.yml`) lints, type-checks, and runs the full test suite
 
 ## Results & Business Impact
 
-Analysis across 5.3M users, 15M sessions, and 206K products:
+All figures below are from the **full dataset**: 109,950,743 events, 5,316,649 users, 23,016,650 sessions, 206,876 products, 697,470 buyers, $505.2M purchase revenue, $304 AOV (Oct + Nov 2019).
 
-| Finding | Numbers | What to do with it |
+| Finding | Numbers (full dataset) | What to do with it |
 |---|---|---|
-| **High-intent users are identifiable** | Top 5% of ML-scored users convert at **4.4x the population baseline rate** (verified by retraining on the sample dataset: 25.7% top-5% conversion vs. a 5.8% baseline). | Run targeted campaigns against this cohort rather than the full list. |
-| **At-risk VIPs** | ~36,000 top-decile users ($890 avg spend) showing churn signals. | This segment is small enough for a personalised reactivation flow, and the spend data makes them worth prioritising. |
-| **Product affinities are strong** | 10M+ product pairs with lift > 1.2 across 4.5M purchase events. | "Frequently bought together" recommendations have a real signal to work from. |
+| **High-intent users are identifiable** | Top 5% of ML-scored users convert at **4.6x the population baseline** — **36.9%** vs an **8.0%** November baseline (0.754 ROC-AUC, held-out November). | Run targeted campaigns against this cohort rather than the full list. |
+| **At-risk VIPs** | The **"Cant Lose Them"** RFM segment: **36,754 users**, **~$956** avg historical spend, **~50 days** since last purchase — high past frequency (avg 3.1 purchase-days) that has gone quiet. | Small enough for a personalised reactivation flow; the spend history makes them worth prioritising. |
+| **Product affinities are real but sparse** | **7,704** directed product-pair rules (lift > 1.2, ≥ 5 co-purchases/session) from **1.66M** purchase events; strongest by volume are Samsung/Apple smartphone accessory pairs. | "Frequently bought together" has signal, but only for high-traffic electronics — most of the 206K-product catalogue has too few co-purchases to mine. |
+| **Recency dominates history** | Nov purchase rate by days-since-last-October-activity: **≤1 day → 16.8%**, 4–7 days → 10.2%, 15–30 days → 4.9%. A user seen yesterday is **~3.5x** more likely to buy than one last seen 2–4 weeks ago. | When scoring users for a campaign, recency should carry heavy weight — it's also the model's, and RFM's, dominant signal. |
+| **The funnel break is up top** | Session cart-to-purchase is **60.6%** (solid); view-to-cart is **10.1%** — that's where sessions drop off. Overall session conversion **6.1%**. | Invest in the browse→cart step (merchandising, PDP quality), not the checkout. |
 
-### A couple of interesting findings:
-- **Recency dominates history**: Users who browsed within the last 24 hours are **6x more likely** to purchase than those last seen 30 days ago. If you're scoring users for a campaign, recency should carry heavy weight.
-- **The funnel break is up top**: Cart-to-purchase is 60.6%, which is solid. The problem is view-to-cart at 10.1% - that's where sessions are dropping off.
+### RFM segments (buyers only, recency anchored to the dataset's max date)
+
+| Segment | Users | % of buyers | Avg spend | Avg recency (days) |
+|---|--:|--:|--:|--:|
+| Loyal Customers | 148,165 | 21.2% | $668 | 15 |
+| Champions | 136,518 | 19.6% | $1,642 | 8 |
+| At Risk | 111,155 | 15.9% | $273 | 25 |
+| Need Attention | 109,192 | 15.7% | $691 | 35 |
+| Hibernating | 84,444 | 12.1% | $257 | 52 |
+| New Customers | 46,725 | 6.7% | $283 | 10 |
+| Cant Lose Them | 36,754 | 5.3% | $956 | 50 |
+| Promising | 24,517 | 3.5% | $250 | 21 |
+
+Churn status across all 5.32M users (as of 2019-11-30): **Active 1.40M · At Risk 1.03M · Churned 2.88M** — most of the "churned" bucket is the long tail of users who appeared only briefly in October.
+
+### A/B test simulation *(illustrative)*
+
+`src/analysis/ab_testing.py` runs a **synthetic** experiment (seeded Bernoulli outcomes, assumed 12% base rate, +15% treatment effect) against the real 36,754-user "Cant Lose Them" population: control 12.1% vs treatment 13.5%, relative lift 11.6%, p ≈ 6e-5, power 0.98. The population size is real; the outcomes are simulated to exercise the stats engine, not a measured result.
+
+---
+
+## Computational Considerations
+
+### Full dataset vs. sample — what produced each number
+
+| Stage | Full dataset (109.95M rows) | Sample (1.65M rows, tracked) |
+|---|---|---|
+| Ingestion / optimised Parquet | ✅ `summarise/optimize_dataset.py` on `data/2019-{Oct,Nov}.csv` | n/a |
+| Star schema, RFM, retention, churn, feature store | ✅ `src/processing/` + `src/analysis/` on `data/db/behavior.duckdb` | ✅ `scripts/create_cloud_database.py` on `data/sample/` |
+| Market-basket affinity | ✅ 7,704 rules | ✅ 11 rules *(sample)* |
+| **Propensity model (`propensity_lgbm.pkl`, `metrics.json`)** | ✅ **checked-in model is the full-data one** (0.754 AUC, 4.6x lift) | — earlier revisions trained on the sample (0.72 AUC); superseded |
+| Streamlit dashboard | ✅ works in full/local mode when `data/db/behavior.duckdb` exists | ✅ default cloud mode (deployed app) |
+| API service (`api/`) + `tests/` | — | ✅ always runs on the sample DuckDB |
+| `scripts/build_static_artifacts.py` (deployment pre-compute) | — | ✅ sample only *(out of scope here)* |
+
+Every "Results & Business Impact" number, the RFM table, the funnel rates, the recency
+gradient, and the propensity metrics are **full-dataset**. The A/B test outcome is
+simulated (population size is real). The sample is a genuine stratified sample of the
+same two months, kept only so the cloud dashboard and CI have something small to run.
+
+### Memory strategy (why it fits a 10 GB box)
+
+The real dataset does not fit in RAM naively (~40 GB as a pandas frame), and early runs
+of this pipeline froze a 10 GB machine by letting DuckDB commit 10–12 GB and thrash swap.
+Fixes, all targeted:
+
+- **`src/utils/duckdb_env.py`** — one place that tunes every pipeline DuckDB session:
+  `memory_limit=3GB`, `threads=2`, `preserve_insertion_order=false`, disk spill enabled.
+  Override per-machine with `CIP_DUCKDB_MEMORY_LIMIT` / `CIP_DUCKDB_THREADS` / `CIP_DUCKDB_TEMP_DIR`.
+- **Ingestion is one streaming DuckDB `COPY`**, not a two-pass Polars pipeline — the old
+  `.cast(pl.Categorical)` on 23M unique `user_session` UUIDs built a huge in-memory
+  dictionary.
+- **`loader.py` no longer re-sorts** the 110M-row table by `event_time` — the optimised
+  Parquet is already time-ordered (verified: 218 out-of-order adjacent rows in 110M), and
+  the re-sort spilled > 8 GB for no downstream benefit.
+- **`sessionization.py`** dropped an unused `mode(category_code)` column — `mode()` is a
+  holistic aggregate DuckDB can't spill, and over 23M session groups it drove RSS to
+  ~8.5 GB. It also caps threads to 2 for that one heaviest GROUP BY.
+- **`features.py`** replaced two `mode()` calls with a spillable `arg_max`-over-counts form.
+- The reproduction script wraps each stage in a `systemd-run --scope -p MemoryMax=4G
+  -p MemorySwapMax=0` cgroup, so a runaway stage is OOM-killed cleanly instead of freezing
+  the host.
+
+Result: the full pipeline completes with **peak RSS ≈ 3 GB** and no swap.
 
 ---
 
@@ -147,8 +215,9 @@ customer-intelligence-platform/
 ├── config/               # YAML configuration files
 ├── data/                 # Parquet files and DuckDB database (not checked in)
 ├── scripts/              # One-off build scripts
-│   ├── create_cloud_database.py
-│   └── create_sample_dataset.py
+│   ├── create_sample_dataset.py    # stratified sample from the full DuckDB
+│   ├── create_cloud_database.py    # sample -> sample.duckdb (star schema)
+│   └── finalize_full_db.py         # dashboard-compat views on the full DuckDB
 ├── src/                  # Core analytics, ML, and API-service modules
 │   ├── analysis/         # RFM, cohort retention, A/B testing
 │   ├── domain/           # Pydantic request/response models for the API
@@ -156,7 +225,7 @@ customer-intelligence-platform/
 │   ├── models/           # Propensity model, metrics.json, recommendations
 │   ├── processing/       # Sessionisation, feature engineering, shared dimensional-model builder
 │   ├── services/         # Service layer used by the API (segmentation, propensity, etc.)
-│   ├── utils/            # Shared helpers
+│   ├── utils/            # Shared helpers (duckdb_env.py — pipeline memory tuning)
 │   ├── config.py         # Pydantic-settings config for the API service
 │   └── db.py             # Read-only DuckDB connection manager for the API service
 ├── summarise/            # ETL scripts for compressing the raw dataset
@@ -172,81 +241,72 @@ customer-intelligence-platform/
 
 ## Installation & Setup
 
-You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above and install with `pip install -e ".[api]"` instead of `requirements.txt`.
+You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109.95M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above and install with `pip install -e ".[api]"` instead of `requirements.txt`.
 
 ### 1. Environment Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/BhargavKumarNath/Customer-Intelligence-Platform.git
 cd Customer-Intelligence-Platform
-
-# Create and activate virtual environment
 python -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-# On Linux/macOS
-source .venv/bin/activate
-# On Windows
-.venv\Scripts\activate
-
-# Install dependencies
+# Dashboard-only (Streamlit Cloud pins):
 pip install -r requirements.txt
+# Full local pipeline (ingestion + processing + training):
+pip install -e ".[pipeline,dashboard]"
 ```
 
 ### 2. Data Pipeline
 
-**Option A: Sample dataset (recommended for exploration)**
+**Option A: Sample dataset (recommended for exploration — no download)**
 
-Builds a stratified sample that fits within Streamlit Cloud memory limits.
+Uses the tracked `data/sample/sample_optimized.parquet` (1.65M-row stratified sample of the real 2-month data).
 ```bash
-# 1. Generate the sample Parquet
-python scripts/create_sample_dataset.py
-
-# 2. Build the DuckDB database, dimensional models, and RFM segments
+# Build the sample DuckDB: star schema, RFM segments, retention, affinity
 python scripts/create_cloud_database.py
 ```
 
-**Option B: Full dataset**
+**Option B: Full dataset (109.95M rows)**
 
-Download the 12GB CSV from Kaggle and place it in `/data/raw/` first.
-```bash
-# Run the memory-optimisation pipeline
-python summarise/optimize_dataset.py
-```
-
-### Rebuilding from Scratch
-
-The large data files (~22GB total) are not checked into Git. They're all reproducible from the public Kaggle source. Here's the full rebuild sequence:
-
-**Files you'll need to regenerate:**
-
-| File | Size | How |
-|------|------|-----|
-| `data/raw/2019-Oct.csv`, `data/raw/2019-Nov.csv` | ~14 GB | Kaggle download |
-| `data/raw/2019-Oct-Nov.parquet` | ~1.8 GB | `summarise/combine_csv_to_parquet.py` |
-| `data/raw/ecommerce_optimized.parquet` | ~1.8 GB | `summarise/optimize_dataset.py` |
-| `data/db/behavior.duckdb` | ~5.2 GB | `src/ingestion/loader.py` |
+1. Download `2019-Oct.csv` and `2019-Nov.csv` (~13.7 GB) from the Kaggle dataset
+   [*eCommerce behavior data from multi category store*](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store)
+   and place them in `data/`.
+2. Run the pipeline (each stage tuned for a small-RAM box by `src/utils/duckdb_env.py`;
+   raise `CIP_DUCKDB_MEMORY_LIMIT` / `CIP_DUCKDB_THREADS` on a bigger machine):
 
 ```bash
-# 1. Download raw CSVs from Kaggle ("Multi-Category E-commerce Events")
-#    Place 2019-Oct.csv and 2019-Nov.csv in data/raw/
-
-# 2. Merge the two months into a single Parquet
-python summarise/combine_csv_to_parquet.py \
-    data/raw/2019-Oct.csv \
-    data/raw/2019-Nov.csv \
-    data/raw/2019-Oct-Nov.parquet
-
-# 3. Run the memory-optimisation pass (ZSTD compression + type-casting).
-#    Reads data/raw/2019-Oct-Nov.parquet -> writes data/raw/ecommerce_optimized.parquet
-python summarise/optimize_dataset.py
-
-# 4. Build the full DuckDB database
-#    (reads config/config.yaml for input/output paths)
-python src/ingestion/loader.py
+python summarise/optimize_dataset.py        # data/2019-{Oct,Nov}.csv -> data/raw/ecommerce_optimized.parquet (1.82 GB)
+python src/ingestion/loader.py              # -> data/db/behavior.duckdb  (events, ~5.4 GB)
+python src/processing/initial_modeling.py   # dim_products, dim_users, fact_daily_kpis
+python src/processing/sessionization.py     # fact_sessions (23.0M) + funnel metrics
+python src/analysis/segmentation.py         # analysis_rfm_segments
+python src/processing/features.py           # features_users (5.32M x 19)
+python src/analysis/retention.py            # analysis_weekly_retention, analysis_churn_risk
+python src/models/recommendations.py        # predictions_product_affinity
+python src/models/train_propensity.py       # src/models/propensity_lgbm.pkl + metrics.json
+python src/analysis/ab_testing.py           # A/B simulation (prints; writes nothing)
+python scripts/finalize_full_db.py          # adds user_rfm_segments / weekly_retention views for the dashboard
 ```
 
-> The dimensional model, feature store, and ML prediction tables are materialised by the `src/processing/` and `src/models/` pipeline. For the cloud-ready sample, use Option A above.
+On a 10 GB-RAM / 8-core Linux box the whole sequence runs in **~15 minutes** end-to-end
+(ingestion ~2 min, `initial_modeling` ~90 s, `sessionization` ~45 s, feature/analysis
+steps < 20 s each, training ~50 s). Peak resident memory stays under ~3 GB because
+every DuckDB session is capped and free to spill to disk.
+
+> `summarise/combine_csv_to_parquet.py` (the old Polars concat step) is retained but no
+> longer needed — `optimize_dataset.py` reads the two raw CSVs directly.
+
+### Rebuilding from Scratch — regenerated files
+
+None of these are in Git; all are reproducible from the Kaggle source.
+
+| File | Size | Built by |
+|------|------|----------|
+| `data/2019-Oct.csv`, `data/2019-Nov.csv` | 13.7 GB | Kaggle download |
+| `data/raw/ecommerce_optimized.parquet` | 1.82 GB | `summarise/optimize_dataset.py` |
+| `data/db/behavior.duckdb` | ~5.4 GB | `src/ingestion/loader.py` + `src/processing/` + `src/analysis/` |
+| `src/models/propensity_lgbm.pkl`, `metrics.json` | ~3.4 MB | `src/models/train_propensity.py` (checked in) |
 
 ### 3. Running the Dashboard
 

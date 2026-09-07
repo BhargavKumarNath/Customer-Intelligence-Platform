@@ -1,275 +1,211 @@
-import polars as pl
-import numpy as np
+"""Build the memory-optimised Parquet the rest of the pipeline reads.
+
+Input : the raw Kaggle CSVs (``data/2019-Oct.csv``, ``data/2019-Nov.csv`` -
+        ~14 GB, 109.95M rows total).
+Output: ``data/raw/ecommerce_optimized.parquet`` - the single file
+        ``config/config.yaml -> paths.raw_data`` points at and
+        ``src/ingestion/loader.py`` ingests into DuckDB.
+
+Why DuckDB and not Polars here
+-----------------------------
+The earlier version of this module did two Polars passes: ``pl.concat`` of two
+``scan_csv`` LazyFrames streamed to one Parquet, then a second pass that
+``.cast(pl.Categorical)`` every string column (including ``user_session``) and
+streamed again. On a 16 GB box that was already tight; on a smaller machine it
+OOMs, because casting the 23M distinct ``user_session`` UUIDs to ``Categorical``
+materialises a 23M-entry string dictionary in memory - the opposite of an
+optimisation for a near-unique column.
+
+DuckDB reads the CSVs in bounded-memory streaming chunks, spills to
+``temp_directory`` when a step needs more than ``memory_limit``, and writes
+Parquet with per-row-group dictionary + ZSTD encoding. Low-cardinality columns
+(``event_type``, ``brand``, ``category_code``) get dictionary-encoded
+automatically; ``user_session`` is left as a plain string (correct for a
+near-unique column). The numeric downcasts (``BIGINT -> INTEGER`` for the id
+columns, ``DOUBLE -> FLOAT`` for price) are applied in the projection.
+
+Run::
+
+    python summarise/optimize_dataset.py
+"""
+
+from __future__ import annotations
+
 from pathlib import Path
 
-def optimize_ecommerce_dataset(input_path: str, output_path: str):
-    """
-    Optimize large e-commerce dataset for 16GB RAM system
-    
-    Parameters:
-    -----------
-    input_path : str
-        Path to input parquet file
-    output_path : str
-        Path to save optimized parquet file
-    """
-    
-    print("Starting optimization process...")
-    print(f"Reading from: {input_path}")
-    
-    # Read with streaming to avoid memory issues
-    df = pl.scan_parquet(input_path)
-    
-    # Apply optimizations
-    df_optimized = df.select([
-        # Parse datetime once and store as optimal type
-        pl.col("event_time").str.to_datetime("%Y-%m-%d %H:%M:%S UTC").alias("event_time"),
-        
-        # Event type - categorical with few unique values
-        pl.col("event_type").cast(pl.Categorical),
-        
-        # Product ID - reduce from Int64 to Int32 (max: 100M fits in Int32)
-        pl.col("product_id").cast(pl.Int32),
-        
-        # Category ID - needs Int64 but we can try dictionary encoding
-        pl.col("category_id"),
-        
-        # Category code - categorical (many nulls, hierarchical structure)
-        pl.col("category_code").cast(pl.Categorical),
-        
-        # Brand - categorical (many nulls)
-        pl.col("brand").cast(pl.Categorical),
-        
-        # Price - reduce precision from Float64 to Float32
-        pl.col("price").cast(pl.Float32),
-        
-        # User ID - reduce from Int64 to Int32
-        pl.col("user_id").cast(pl.Int32),
-        
-        # User session - categorical (UUID)
-        pl.col("user_session").cast(pl.Categorical),
-    ])
-    
-    # Collect and save with optimized settings
-    print("Collecting and optimizing data...")
-    
-    df_optimized.sink_parquet(
-        output_path,
-        compression="zstd",  # Better compression than snappy
-        compression_level=3,  # Balanced speed/compression (10 was too slow)
-        statistics=True,
-        row_group_size=500_000,  # Larger row groups for better query performance
-    )
-    
-    print(f"Optimized file saved to: {output_path}")
-    
-    # Print comparison statistics
-    print("\n" + "="*60)
-    print("OPTIMIZATION SUMMARY")
-    print("="*60)
-    
-    original_size = Path(input_path).stat().st_size / (1024**3)
-    optimized_size = Path(output_path).stat().st_size / (1024**3)
-    
-    print(f"Original size: {original_size:.2f} GB")
-    print(f"Optimized size: {optimized_size:.2f} GB")
-    print(f"Size reduction: {(1 - optimized_size/original_size)*100:.1f}%")
-    
-    # Memory usage estimate
-    print("\n" + "="*60)
-    print("ESTIMATED MEMORY USAGE PER COLUMN (110M rows)")
-    print("="*60)
-    print(f"event_time (Datetime):      ~880 MB")
-    print(f"event_type (Categorical):   ~110 MB")
-    print(f"product_id (Int32):         ~440 MB")
-    print(f"category_id (Int64):        ~880 MB")
-    print(f"category_code (Categorical):~200 MB (est)")
-    print(f"brand (Categorical):        ~150 MB (est)")
-    print(f"price (Float32):            ~440 MB")
-    print(f"user_id (Int32):            ~440 MB")
-    print(f"user_session (Categorical): ~200 MB (est)")
-    print(f"{'─'*60}")
-    print(f"TOTAL ESTIMATED:            ~3.7 GB in memory")
-    print(f"Your available RAM:         16 GB")
-    print(f"Safety margin:              ~12 GB for processing")
+import duckdb
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RAW_CSV_DIR = PROJECT_ROOT / "data"
+DEFAULT_INPUT_CSVS = [RAW_CSV_DIR / "2019-Oct.csv", RAW_CSV_DIR / "2019-Nov.csv"]
+DEFAULT_OUTPUT = PROJECT_ROOT / "data" / "raw" / "ecommerce_optimized.parquet"
+
+# Bounded so the job fits a small (<= 16 GB) machine. DuckDB spills anything
+# larger to `temp_directory`; disk is the cheap resource here, RAM is not.
+MEMORY_LIMIT = "5GB"
+THREADS = 4
+ROW_GROUP_SIZE = 500_000
+
+# Raw event_time looks like "2019-10-01 00:00:00 UTC" - a fixed +00:00 offset,
+# so a naive TIMESTAMP (no tz) is exact and half the width of TIMESTAMPTZ.
+_TS_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
+
+_OPTIMISED_PROJECTION = """
+    strptime(event_time, '{ts_format}')            AS event_time,
+    event_type,
+    CAST(product_id  AS INTEGER)                   AS product_id,
+    category_id,                                   -- kept BIGINT: real ids exceed INT32
+    category_code,
+    brand,
+    CAST(price AS FLOAT)                           AS price,
+    CAST(user_id AS INTEGER)                       AS user_id,
+    user_session
+"""
 
 
-def create_analysis_ready_chunks(input_path: str, output_dir: str, chunk_size: int = 10_000_000):
-    """
-    Create chunked datasets for analysis if full dataset is still too large
-    
-    Parameters:
-    -----------
-    input_path : str
-        Path to optimized parquet file
-    output_dir : str
-        Directory to save chunk files
-    chunk_size : int
-        Rows per chunk (default: 10M rows ~350MB each)
-    """
-    
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
-    
-    print(f"Creating analysis chunks in: {output_dir}")
-    
-    df = pl.scan_parquet(input_path)
-    
-    # Get total rows
-    total_rows = df.select(pl.len()).collect().item()
-    n_chunks = (total_rows + chunk_size - 1) // chunk_size
-    
-    print(f"Total rows: {total_rows:,}")
-    print(f"Chunk size: {chunk_size:,}")
-    print(f"Number of chunks: {n_chunks}")
-    
-    for i in range(n_chunks):
-        offset = i * chunk_size
-        chunk_file = output_path / f"chunk_{i:03d}.parquet"
-        
-        print(f"Processing chunk {i+1}/{n_chunks}...")
-        
-        df.slice(offset, chunk_size).sink_parquet(
-            chunk_file,
-            compression="zstd",
-            compression_level=3,  # match optimize_ecommerce_dataset's level-3 decision (level 10 was too slow)
+def _connect(temp_dir: Path) -> duckdb.DuckDBPyConnection:
+    con = duckdb.connect()
+    con.execute(f"SET memory_limit='{MEMORY_LIMIT}'")
+    con.execute(f"SET threads TO {THREADS}")
+    con.execute("SET preserve_insertion_order=false")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    con.execute(f"SET temp_directory='{temp_dir.as_posix()}'")
+    return con
+
+
+def _csv_relation_sql(csv_paths: list[Path]) -> str:
+    files = ", ".join(f"'{p.as_posix()}'" for p in csv_paths)
+    # Explicit column types: never let the sniffer widen an id column or read
+    # price as DECIMAL. names/dtypes match the raw Kaggle header exactly.
+    return f"""
+        read_csv(
+            [{files}],
+            header = true,
+            columns = {{
+                'event_time': 'VARCHAR',
+                'event_type': 'VARCHAR',
+                'product_id': 'BIGINT',
+                'category_id': 'BIGINT',
+                'category_code': 'VARCHAR',
+                'brand': 'VARCHAR',
+                'price': 'DOUBLE',
+                'user_id': 'BIGINT',
+                'user_session': 'VARCHAR'
+            }}
         )
-    
-    print(f"\nCreated {n_chunks} chunk files")
-    print("Use with: pl.scan_parquet('chunks/*.parquet') for lazy operations")
+    """
 
 
-def load_for_analysis(file_path: str, sample_frac: float = None):
-    """
-    Load optimized dataset for analysis with optional sampling
-    
-    Parameters:
-    -----------
-    file_path : str
-        Path to optimized parquet file
-    sample_frac : float, optional
-        Fraction to sample (e.g., 0.1 for 10%)
-    
-    Returns:
-    --------
-    pl.LazyFrame
-        Lazy frame ready for analysis
-    """
-    
-    df = pl.scan_parquet(file_path)
-    
-    if sample_frac:
-        print(f"Sampling {sample_frac*100}% of data...")
-        df = df.filter(pl.col("user_id") % int(1/sample_frac) == 0)
-    
-    return df
+def optimize_ecommerce_dataset(
+    input_csvs: list[Path] | None = None, output_path: Path | None = None
+) -> Path:
+    """Stream the raw CSVs into one type-optimised, ZSTD Parquet file."""
+    input_csvs = input_csvs or DEFAULT_INPUT_CSVS
+    output_path = output_path or DEFAULT_OUTPUT
+    missing = [p for p in input_csvs if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Raw CSV(s) not found: " + ", ".join(str(p) for p in missing)
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    print("Starting optimisation process...")
+    print(f"Reading from : {[str(p) for p in input_csvs]}")
+    print(f"Writing to   : {output_path}")
 
-def create_indexed_subsets(input_path: str, output_dir: str):
-    """
-    Create pre-aggregated and indexed subsets for common analysis patterns
-    This dramatically speeds up repeated queries
-    """
-    
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
-    
-    print("Creating analysis-optimized subsets...")
-    df = pl.scan_parquet(input_path)
-    
-    # 1. Product-level aggregations (for product analysis)
-    print("Building product summary...")
-    product_summary = (
-        df.group_by("product_id")
-        .agg([
-            pl.len().alias("total_events"),
-            pl.col("event_type").filter(pl.col("event_type") == "view").len().alias("views"),
-            pl.col("event_type").filter(pl.col("event_type") == "cart").len().alias("carts"),
-            pl.col("event_type").filter(pl.col("event_type") == "purchase").len().alias("purchases"),
-            pl.col("price").first().alias("price"),
-            pl.col("brand").first().alias("brand"),
-            pl.col("category_code").first().alias("category_code"),
-            pl.col("user_id").n_unique().alias("unique_users"),
-        ])
-        .collect()
+    con = _connect(output_path.parent / ".duckdb_tmp")
+    projection = _OPTIMISED_PROJECTION.format(ts_format=_TS_FORMAT)
+    relation = _csv_relation_sql(input_csvs)
+    con.execute(
+        f"""
+        COPY (SELECT {projection} FROM {relation})
+        TO '{output_path.as_posix()}'
+        (FORMAT PARQUET, COMPRESSION ZSTD, COMPRESSION_LEVEL 3,
+         ROW_GROUP_SIZE {ROW_GROUP_SIZE})
+        """
     )
-    product_summary.write_parquet(output_path / "product_summary.parquet")
-    print(f"  → Saved: {len(product_summary):,} products")
-    
-    # 2. User-level aggregations (for user behavior analysis)
-    print("Building user summary...")
-    user_summary = (
-        df.group_by("user_id")
-        .agg([
-            pl.len().alias("total_events"),
-            pl.col("event_type").filter(pl.col("event_type") == "view").len().alias("views"),
-            pl.col("event_type").filter(pl.col("event_type") == "cart").len().alias("carts"),
-            pl.col("event_type").filter(pl.col("event_type") == "purchase").len().alias("purchases"),
-            pl.col("product_id").n_unique().alias("unique_products"),
-            pl.col("price").filter(pl.col("event_type") == "purchase").sum().alias("total_spent"),
-        ])
-        .collect()
+
+    raw_bytes = sum(p.stat().st_size for p in input_csvs)
+    opt_bytes = output_path.stat().st_size
+    rows = con.execute(
+        f"SELECT COUNT(*) FROM read_parquet('{output_path.as_posix()}')"
+    ).fetchone()[0]
+    con.close()
+
+    print("\n" + "=" * 60)
+    print("OPTIMISATION SUMMARY")
+    print("=" * 60)
+    print(f"Rows written    : {rows:,}")
+    print(f"Raw CSV size    : {raw_bytes / 1024**3:.2f} GB")
+    print(f"Optimised size  : {opt_bytes / 1024**3:.2f} GB")
+    print(f"Disk reduction  : {(1 - opt_bytes / raw_bytes) * 100:.1f}%")
+    return output_path
+
+
+def create_indexed_subsets(parquet_path: Path | None = None, output_dir: Path | None = None) -> None:
+    """Pre-aggregated helper tables for quick, memory-cheap exploratory work.
+
+    Tiny outputs (one row per product / per user / per day); each is a single
+    streaming aggregation over the optimised Parquet, run in DuckDB so it stays
+    within ``MEMORY_LIMIT`` regardless of how large the source grows.
+    """
+    parquet_path = parquet_path or DEFAULT_OUTPUT
+    output_dir = output_dir or (PROJECT_ROOT / "data" / "analysis_subsets")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    con = _connect(output_dir / ".duckdb_tmp")
+    src = f"read_parquet('{parquet_path.as_posix()}')"
+
+    print("Building product_summary.parquet ...")
+    con.execute(
+        f"""
+        COPY (
+            SELECT product_id,
+                   COUNT(*)                                              AS total_events,
+                   COUNT(*) FILTER (WHERE event_type = 'view')           AS views,
+                   COUNT(*) FILTER (WHERE event_type = 'cart')           AS carts,
+                   COUNT(*) FILTER (WHERE event_type = 'purchase')       AS purchases,
+                   any_value(price)                                      AS price,
+                   any_value(brand)                                     AS brand,
+                   any_value(category_code)                             AS category_code,
+                   COUNT(DISTINCT user_id)                              AS unique_users
+            FROM {src} GROUP BY product_id
+        ) TO '{(output_dir / "product_summary.parquet").as_posix()}' (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
     )
-    user_summary.write_parquet(output_path / "user_summary.parquet")
-    print(f"  → Saved: {len(user_summary):,} users")
-    
-    # 3. Daily time-series (for trend analysis)
-    print("Building daily time-series...")
-    daily_summary = (
-        df.with_columns(pl.col("event_time").cast(pl.Date).alias("date"))
-        .group_by(["date", "event_type"])
-        .agg([
-            pl.len().alias("event_count"),
-            pl.col("user_id").n_unique().alias("unique_users"),
-            pl.col("price").filter(pl.col("event_type") == "purchase").sum().alias("revenue"),
-        ])
-        .collect()
-        .sort("date")
+
+    print("Building user_summary.parquet ...")
+    con.execute(
+        f"""
+        COPY (
+            SELECT user_id,
+                   COUNT(*)                                                       AS total_events,
+                   COUNT(*) FILTER (WHERE event_type = 'view')                    AS views,
+                   COUNT(*) FILTER (WHERE event_type = 'cart')                    AS carts,
+                   COUNT(*) FILTER (WHERE event_type = 'purchase')                AS purchases,
+                   COUNT(DISTINCT product_id)                                     AS unique_products,
+                   SUM(price) FILTER (WHERE event_type = 'purchase')              AS total_spent
+            FROM {src} GROUP BY user_id
+        ) TO '{(output_dir / "user_summary.parquet").as_posix()}' (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
     )
-    daily_summary.write_parquet(output_path / "daily_summary.parquet")
-    print(f"  → Saved: {len(daily_summary):,} daily records")
-    
-    print(f"\nAnalysis subsets saved to: {output_dir}")
-    print("These are tiny files that load instantly for common analyses!")
+
+    print("Building daily_summary.parquet ...")
+    con.execute(
+        f"""
+        COPY (
+            SELECT CAST(event_time AS DATE)                                       AS date,
+                   event_type,
+                   COUNT(*)                                                       AS event_count,
+                   COUNT(DISTINCT user_id)                                        AS unique_users,
+                   SUM(price) FILTER (WHERE event_type = 'purchase')              AS revenue
+            FROM {src} GROUP BY 1, 2 ORDER BY 1, 2
+        ) TO '{(output_dir / "daily_summary.parquet").as_posix()}' (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+    con.close()
+    print(f"Analysis subsets written to: {output_dir}")
 
 
 if __name__ == "__main__":
-    RAW_DIR = Path("data") / "raw"
-    COMBINED_PARQUET = RAW_DIR / "2019-Oct-Nov.parquet"
-    OPTIMIZED_PARQUET = RAW_DIR / "ecommerce_optimized.parquet"
-
-    optimize_ecommerce_dataset(
-        input_path=str(COMBINED_PARQUET),
-        output_path=str(OPTIMIZED_PARQUET)
-    )
-
-    create_indexed_subsets(
-        input_path=str(OPTIMIZED_PARQUET),
-        output_dir=str(Path("data") / "analysis_subsets")
-    )
-
-    print("\n" + "="*60)
-    print("LOADING FOR ANALYSIS EXAMPLES")
-    print("="*60)
-
-    # Full dataset (lazy)
-    df_full = pl.scan_parquet(str(OPTIMIZED_PARQUET))
-    print("\nFull dataset (lazy):")
-    print(df_full.schema)
-
-    # Sample 10% for quick exploration
-    df_sample = load_for_analysis(str(OPTIMIZED_PARQUET), sample_frac=0.1)
-    print("\n10% Sample (lazy):")
-    print(df_sample.select(pl.len()).collect())
-    
-    print("\nExample: Top 10 products by view count")
-    top_products = (
-        df_full
-        .filter(pl.col("event_type") == "view")
-        .group_by("product_id")
-        .agg(pl.len().alias("view_count"))
-        .sort("view_count", descending=True)
-        .head(10)
-        .collect()
-    )
-    print(top_products)
+    out = optimize_ecommerce_dataset()
+    create_indexed_subsets(out)
