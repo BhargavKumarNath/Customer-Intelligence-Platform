@@ -113,6 +113,8 @@ export interface AbGridCell {
 
 export interface DataManifest {
   sha: string;
+  /** How sync-data.mjs resolved the pin: DATA_SHA env, data.lock, or the sole dist dir. */
+  pinSource: "env" | "lock" | "dist";
   gitSha: string;
   builtAt: string;
   syncedAt: string;

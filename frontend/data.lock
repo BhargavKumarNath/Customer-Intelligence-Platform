@@ -1,0 +1,6 @@
+{
+  "sha": "dev",
+  "builtAt": "2026-09-08T09:43:02.656285+00:00",
+  "source": "local",
+  "note": "Pins the Phase 2 precompute artifact set the frontend builds against. CI branch/PR builds override this with DATA_SHA=$GITHUB_SHA (the precompute job's output sha). Bump sha + builtAt here when adopting a new published data version for local and preview builds; fetch-data.mjs will pull it from DATA_BASE_URL. See deployment_stages.md Phase 6."
+}

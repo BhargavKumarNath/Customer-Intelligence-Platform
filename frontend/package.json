@@ -5,9 +5,10 @@
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "predev": "node scripts/sync-data.mjs",
+    "data": "node scripts/fetch-data.mjs && node scripts/sync-data.mjs",
+    "predev": "pnpm data",
     "dev": "next dev",
-    "prebuild": "node scripts/sync-data.mjs",
+    "prebuild": "pnpm data",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
