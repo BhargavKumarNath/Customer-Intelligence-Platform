@@ -7,11 +7,12 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from api.exception_handlers import register_exception_handlers
 from api.logging_config import configure_logging
 from api.middleware import RequestContextMiddleware
-from api.routers import experiments, health, propensity, recommendations, segments
+from api.routers import experiments, health, meta, propensity, recommendations, segments
 from src.config import Environment, get_settings
 
 
@@ -43,10 +44,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(RequestContextMiddleware)
+    # Trust X-Forwarded-* from the single managed proxy in front of the service
+    # (Cloud Run / Cloudflare) so request.url.scheme and client IP are correct
+    # for the rate limiter and logs. Configurable via CIP_FORWARDED_ALLOW_IPS.
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.forwarded_allow_ips)
 
     register_exception_handlers(app)
 
     app.include_router(health.router)
+    app.include_router(meta.router)
     app.include_router(segments.router)
     app.include_router(propensity.router)
     app.include_router(recommendations.router)

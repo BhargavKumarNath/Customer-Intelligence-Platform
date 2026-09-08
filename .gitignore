@@ -43,12 +43,16 @@ src/models/*.pkl
 src/models/*.joblib
 src/models/*.h5
 src/models/*.pth
+src/models/*.txt
 *.model
 
 # ...except the checked-in propensity model: it can't be regenerated in CI/Docker
 # (training needs the full ~13.7GB raw dataset), and it's small (~3.5MB, 998 trees,
-# trained on the full 109.95M-row dataset).
+# trained on the full 109.95M-row dataset). propensity_lgbm.txt is LightGBM's
+# native text format (Phase 3 task 6); the .pkl is kept for one release as a
+# load fallback and is removed in a later phase.
 !src/models/propensity_lgbm.pkl
+!src/models/propensity_lgbm.txt
 
 # Generated Outputs and Logs
 logs/

@@ -38,7 +38,7 @@ from tests.precompute._schemas import ADAPTERS, schema_for, schema_path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SAMPLE_PARQUET = PROJECT_ROOT / "data" / "sample" / "sample_optimized.parquet"
-MODEL_PATH = PROJECT_ROOT / "src" / "models" / "propensity_lgbm.pkl"
+MODEL_PATH = PROJECT_ROOT / "src" / "models" / "propensity_lgbm.txt"
 METRICS_SRC = PROJECT_ROOT / "src" / "models" / "metrics.json"
 
 FIXED_SHA = "phase2testsha"

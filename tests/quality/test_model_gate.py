@@ -1,5 +1,5 @@
-"""Regression gate: fails CI if propensity_lgbm.pkl is ever swapped for a
-materially worse model. Not a measure of true held-out generalisation (the
+"""Regression gate: fails CI if the propensity model is ever swapped for a
+materially worse one. Not a measure of true held-out generalisation (the
 fixture rows may overlap the original training population) - it exists to
 catch accidental model degradation, not to certify model quality.
 """
@@ -18,12 +18,12 @@ MIN_ACCEPTABLE_AUC = 0.65
 
 
 def test_propensity_model_auc_meets_quality_bar() -> None:
-    model = load_model(Path("src/models/propensity_lgbm.pkl"))
+    model = load_model(Path("src/models/propensity_lgbm.txt"))
     eval_df = pd.read_parquet(FIXTURE_PATH)
 
     predictions = model.predict(eval_df[list(model.feature_name())])
     auc = roc_auc_score(eval_df["target"], predictions)
 
     assert auc >= MIN_ACCEPTABLE_AUC, (
-        f"propensity_lgbm.pkl ROC-AUC dropped to {auc:.4f} (gate: >= {MIN_ACCEPTABLE_AUC})"
+        f"propensity model ROC-AUC dropped to {auc:.4f} (gate: >= {MIN_ACCEPTABLE_AUC})"
     )

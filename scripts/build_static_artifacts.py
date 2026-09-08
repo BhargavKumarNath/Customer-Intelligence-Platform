@@ -75,7 +75,7 @@ if TYPE_CHECKING:
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PARQUET = PROJECT_ROOT / "data" / "sample" / "sample_optimized.parquet"
 DEFAULT_OUT_ROOT = PROJECT_ROOT / "dist" / "data"
-DEFAULT_MODEL = PROJECT_ROOT / "src" / "models" / "propensity_lgbm.pkl"
+DEFAULT_MODEL = PROJECT_ROOT / "src" / "models" / "propensity_lgbm.txt"
 METRICS_SRC = PROJECT_ROOT / "src" / "models" / "metrics.json"
 
 # Match scripts/create_cloud_database.py so the star schema is byte-identical to

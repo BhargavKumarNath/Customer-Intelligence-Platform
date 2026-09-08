@@ -107,6 +107,12 @@ def test_openapi_schema_exposes_all_routes() -> None:
     assert {
         "/healthz",
         "/ready",
+        "/version",
+        "/v1/meta",
+        "/v1/segments",
+        "/v1/segments/{name}",
+        "/v1/models",
+        "/v1/models/propensity",
         "/v1/users/{user_id}/segment",
         "/v1/users/{user_id}/propensity",
         "/v1/products/{product_id}/recommendations",

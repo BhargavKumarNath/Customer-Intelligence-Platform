@@ -19,6 +19,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         request_id = str(uuid.uuid4())
+        # Exposed on request.state so the RFC 9457 exception handlers can echo the
+        # same id into the problem body that this middleware puts in X-Request-ID.
+        request.state.request_id = request_id
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             request_id=request_id, method=request.method, path=request.url.path

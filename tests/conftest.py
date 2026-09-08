@@ -60,7 +60,7 @@ def sample_database() -> Path:
 def settings(sample_database: Path) -> Settings:
     return Settings(
         database_path=sample_database,
-        model_path=PROJECT_ROOT / "src" / "models" / "propensity_lgbm.pkl",
+        model_path=PROJECT_ROOT / "src" / "models" / "propensity_lgbm.txt",
     )
 
 

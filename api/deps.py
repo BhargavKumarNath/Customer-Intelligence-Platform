@@ -5,6 +5,7 @@ from functools import lru_cache
 from src.config import get_settings
 from src.db import get_connection_manager
 from src.services.experiments import ABTestService
+from src.services.metadata import MetadataService
 from src.services.propensity import PropensityService, load_model
 from src.services.recommendations import RecommendationService
 from src.services.segmentation import SegmentationService
@@ -30,3 +31,14 @@ def get_propensity_service() -> PropensityService:
     settings = get_settings()
     model = load_model(settings.model_path)
     return PropensityService(get_connection_manager(), model)
+
+
+@lru_cache(maxsize=1)
+def get_metadata_service() -> MetadataService:
+    settings = get_settings()
+    return MetadataService(
+        get_connection_manager(),
+        settings.metrics_path,
+        git_sha=settings.git_sha,
+        built_at=settings.built_at,
+    )

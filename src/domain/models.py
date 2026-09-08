@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +29,38 @@ class ProductRecommendation(BaseModel):
     pair_count: int = Field(description="Number of sessions both products were purchased in")
     confidence: float = Field(ge=0.0)
     lift: float = Field(ge=0.0, description="Association strength; >1 means a positive affinity")
+
+
+class VersionInfo(BaseModel):
+    """`GET /version` — service + model build identity."""
+
+    git_sha: str = Field(description="Service build commit, or the model's git_sha as a fallback")
+    built_at: str = Field(description="ISO-8601 build/train timestamp")
+    model_version: str = Field(description="Propensity model git_sha, from metrics.json")
+
+
+class ModelSummary(BaseModel):
+    """One row of `GET /v1/models`."""
+
+    name: str
+    kind: str = Field(description="Model family, e.g. 'lightgbm-gbdt-binary'")
+    version: str = Field(description="metrics.json git_sha")
+    auc_roc: float
+
+
+class ModelDetail(BaseModel):
+    """`GET /v1/models/propensity` — the frozen model card from metrics.json."""
+
+    name: str
+    version: str
+    trained_at: str
+    auc_roc: float
+    precision_top5pct: float
+    recall_top5pct: float
+    lift_top5pct: float
+    baseline_conversion_rate: float
+    feature_importance_gain: dict[str, float]
+    params: dict[str, Any]
 
 
 class ABTestRequest(BaseModel):

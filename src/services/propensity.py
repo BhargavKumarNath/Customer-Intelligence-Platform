@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,10 +55,32 @@ _FEATURE_ORDER = [
 
 
 def load_model(model_path: Path) -> Booster:
+    """Load the frozen propensity Booster.
+
+    Native LightGBM text (``propensity_lgbm.txt``, written by ``booster.save_model``)
+    is the supported format and is byte-for-byte prediction-identical to the legacy
+    pickle. The ``.pkl`` branch is a one-release migration fallback: if the given
+    ``.pkl`` has a sibling ``.txt`` the text file wins; otherwise the pickle is
+    unpickled and a ``DeprecationWarning`` is emitted. Only ever called with the
+    repo's own checked-in artifact path - never a caller-supplied path.
+    """
+    from lightgbm import Booster
+
+    if model_path.suffix == ".txt":
+        return Booster(model_file=str(model_path))
+
+    sibling_txt = model_path.with_suffix(".txt")
+    if sibling_txt.exists():
+        return Booster(model_file=str(sibling_txt))
+
+    warnings.warn(
+        f"Loading the propensity model from a pickle ({model_path.name}) is deprecated; "
+        "regenerate it as propensity_lgbm.txt via Booster.save_model(). "
+        "The pickle fallback will be removed after one release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     with model_path.open("rb") as f:
-        # Loads only the repo's own checked-in propensity_lgbm.pkl, baked into the image
-        # at build time - never a caller-supplied path. Phase 3 replaces this with
-        # lightgbm's native Booster(model_file=...) / booster.save_model().
         return pickle.load(f)  # type: ignore[no-any-return]  # nosec B301
 
 

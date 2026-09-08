@@ -100,6 +100,16 @@ jobs:
           --cov-report=term-missing:skip-covered
           --cov-fail-under=90
 
+      - name: API deprecation gate (P3-NEW-2)
+        # tests/api/conftest.py already turns DeprecationWarning into an error per
+        # test; this re-runs the suite with the flag on the command line so an
+        # import-time deprecation in api/ also fails. The one allow-listed ignore
+        # is the upstream anyio/starlette.testclient alias, pending the httpx2 move.
+        run: >
+          pytest -q tests/api
+          -W error::DeprecationWarning
+          -W "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning"
+
       - name: Generate data-drift report
         run: python scripts/generate_drift_report.py
 
