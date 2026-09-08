@@ -1,0 +1,218 @@
+[
+  {
+    "expected": {
+      "ci95Lower": -0.0027680358597026306,
+      "ci95Upper": 0.03876803585970266,
+      "isSignificant": false,
+      "pValue": 0.08952764861520285,
+      "power": 0.39692689523677505,
+      "powerDefined": true,
+      "relativeLift": 0.15000000000000013
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 240,
+      "controlN": 2000,
+      "treatmentConversions": 276,
+      "treatmentN": 2000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.008840557059508855,
+      "ci95Upper": 0.05115944294049114,
+      "isSignificant": true,
+      "pValue": 0.005492584798739508,
+      "power": 0.7933848664708043,
+      "powerDefined": true,
+      "relativeLift": 0.25
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 240,
+      "controlN": 2000,
+      "treatmentConversions": 300,
+      "treatmentN": 2000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": -0.013725628948000255,
+      "ci95Upper": 0.025725628948000265,
+      "isSignificant": false,
+      "pValue": 0.6170041099882407,
+      "power": 0.142151763913852,
+      "powerDefined": true,
+      "relativeLift": 0.050000000000000044
+    },
+    "input": {
+      "confidenceLevel": 0.9,
+      "controlConversions": 180,
+      "controlN": 1500,
+      "treatmentConversions": 189,
+      "treatmentN": 1500
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.0044667260911190835,
+      "ci95Upper": 0.02753327390888092,
+      "isSignificant": true,
+      "pValue": 0.00035368911247425796,
+      "power": 0.8406719600009341,
+      "powerDefined": true,
+      "relativeLift": 0.2
+    },
+    "input": {
+      "confidenceLevel": 0.99,
+      "controlConversions": 640,
+      "controlN": 8000,
+      "treatmentConversions": 768,
+      "treatmentN": 8000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": -0.014892803097855963,
+      "ci95Upper": 0.038892803097855984,
+      "isSignificant": false,
+      "pValue": 0.5679409127884593,
+      "power": 0.2708006395994789,
+      "powerDefined": true,
+      "relativeLift": 0.10000000000000009
+    },
+    "input": {
+      "confidenceLevel": 0.8,
+      "controlConversions": 60,
+      "controlN": 500,
+      "treatmentConversions": 66,
+      "treatmentN": 500
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.007558586901649269,
+      "ci95Upper": 0.02244141309835073,
+      "isSignificant": true,
+      "pValue": 7.857833311435193e-05,
+      "power": 0.9767291102195603,
+      "powerDefined": true,
+      "relativeLift": 0.5
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 150,
+      "controlN": 5000,
+      "treatmentConversions": 225,
+      "treatmentN": 5000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": -0.016445020552643477,
+      "ci95Upper": 0.016445020552643477,
+      "isSignificant": false,
+      "pValue": 1.0,
+      "power": 0.050000000000000044,
+      "powerDefined": true,
+      "relativeLift": 0.0
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 360,
+      "controlN": 3000,
+      "treatmentConversions": 360,
+      "treatmentN": 3000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.003604579436258382,
+      "ci95Upper": 0.02039542056374164,
+      "isSignificant": true,
+      "pValue": 0.005092865335525975,
+      "power": 0.7999389448074756,
+      "powerDefined": true,
+      "relativeLift": 0.10000000000000009
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 1440,
+      "controlN": 12000,
+      "treatmentConversions": 1584,
+      "treatmentN": 12000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.013762823691022167,
+      "ci95Upper": 0.06623717630897782,
+      "isSignificant": true,
+      "pValue": 0.0028566082777402146,
+      "power": 0.8477126677675035,
+      "powerDefined": true,
+      "relativeLift": 0.4999999999999999
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 80,
+      "controlN": 1000,
+      "treatmentConversions": 120,
+      "treatmentN": 1000
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": 0.001643986154868042,
+      "ci95Upper": 0.034911374126327034,
+      "isSignificant": true,
+      "pValue": 0.03133737599552129,
+      "power": 0.5766766047035943,
+      "powerDefined": true,
+      "relativeLift": 0.17105263157894735
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 304,
+      "controlN": 2845,
+      "treatmentConversions": 356,
+      "treatmentN": 2845
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": -0.0026486011619522645,
+      "ci95Upper": 0.025430789632784175,
+      "isSignificant": false,
+      "pValue": 0.18215149763212202,
+      "power": 0.37955076250001485,
+      "powerDefined": true,
+      "relativeLift": 0.0996978851963747
+    },
+    "input": {
+      "confidenceLevel": 0.9,
+      "controlConversions": 331,
+      "controlN": 2897,
+      "treatmentConversions": 364,
+      "treatmentN": 2897
+    }
+  },
+  {
+    "expected": {
+      "ci95Lower": -0.02329853151355704,
+      "ci95Upper": 0.046155674370699895,
+      "isSignificant": false,
+      "pValue": 0.5193204806008692,
+      "power": 0.09878941966575881,
+      "powerDefined": true,
+      "relativeLift": 0.09523809523809523
+    },
+    "input": {
+      "confidenceLevel": 0.95,
+      "controlConversions": 84,
+      "controlN": 700,
+      "treatmentConversions": 92,
+      "treatmentN": 700
+    }
+  }
+]

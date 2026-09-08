@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Warm editorial palette. Light is the reference; dark redefines the same roles.
+  Every value is an HSL triple so palette.ts can read it back for charts.
+*/
+:root {
+  --paper: 40 30% 95%;
+  --surface: 40 40% 99%;
+  --surface-sunken: 40 22% 92%;
+  --ink: 30 9% 12%;
+  --ink-muted: 34 7% 38%;
+  --ink-faint: 34 8% 55%;
+  --rule: 38 18% 84%;
+  --rule-strong: 34 14% 71%;
+  --accent: 18 74% 39%;
+  --accent-soft: 20 66% 93%;
+  --accent-ink: 18 80% 30%;
+  --positive: 145 30% 30%;
+  --caution: 36 62% 38%;
+  --critical: 8 58% 43%;
+
+  --series-1: 18 72% 45%;
+  --series-2: 190 34% 32%;
+  --series-3: 38 58% 46%;
+  --series-4: 348 30% 47%;
+  --series-5: 112 20% 40%;
+  --series-6: 232 26% 50%;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --shell-gutter: clamp(1rem, 4vw, 2.75rem);
+}
+
+.dark {
+  --paper: 36 11% 7%;
+  --surface: 36 11% 10%;
+  --surface-sunken: 36 10% 8%;
+  --ink: 38 24% 90%;
+  --ink-muted: 36 10% 62%;
+  --ink-faint: 36 9% 46%;
+  --rule: 36 9% 19%;
+  --rule-strong: 34 9% 30%;
+  --accent: 20 82% 56%;
+  --accent-soft: 20 40% 16%;
+  --accent-ink: 22 86% 70%;
+  --positive: 145 36% 56%;
+  --caution: 38 72% 60%;
+  --critical: 8 66% 62%;
+
+  --series-1: 20 78% 56%;
+  --series-2: 188 40% 52%;
+  --series-3: 40 66% 58%;
+  --series-4: 348 44% 62%;
+  --series-5: 118 26% 55%;
+  --series-6: 230 44% 68%;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--rule));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  body {
+    background-color: hsl(var(--paper));
+    color: hsl(var(--ink));
+    font-feature-settings: "cv05" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.18);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), Georgia, serif;
+    font-weight: 460;
+    letter-spacing: -0.01em;
+  }
+
+  /* Tabular, lining figures everywhere numbers are compared. */
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  .shell {
+    max-width: theme("maxWidth.shell");
+    margin-inline: auto;
+    padding-inline: var(--shell-gutter);
+  }
+
+  /* A ruled label used to number sections, like a printed report. */
+  .kicker {
+    font-family: var(--font-mono), monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: hsl(var(--ink-faint));
+  }
+
+  .hairline {
+    border-top: 1px solid hsl(var(--rule));
+  }
+
+  .panel {
+    background: hsl(var(--surface));
+    border: 1px solid hsl(var(--rule));
+    border-radius: theme("borderRadius.md");
+  }
+
+  .panel-sunken {
+    background: hsl(var(--surface-sunken));
+  }
+
+  /* Understated link treatment: underline grows on hover. */
+  .link {
+    color: hsl(var(--accent-ink));
+    text-underline-offset: 3px;
+    text-decoration-line: underline;
+    text-decoration-color: hsl(var(--accent) / 0.35);
+    transition: text-decoration-color 0.18s var(--ease-out-quint);
+  }
+  .link:hover {
+    text-decoration-color: hsl(var(--accent));
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--surface-sunken));
+    border-radius: theme("borderRadius.DEFAULT");
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--ink) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton::after {
+      animation: none;
+    }
+  }
+}
+
+/* Recharts: strip the default grey and let our tokens through. */
+.recharts-cartesian-axis-tick text {
+  fill: hsl(var(--ink-faint));
+  font-size: 11px;
+  font-family: var(--font-mono), monospace;
+}
+.recharts-cartesian-grid line {
+  stroke: hsl(var(--rule));
+}
+.recharts-tooltip-wrapper {
+  outline: none;
+}
