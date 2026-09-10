@@ -29,6 +29,23 @@ updates:
       actions-all:
         patterns: ["*"]
 
+  # Frontend (Next.js) npm deps under frontend/. Same posture as the pip block:
+  # the project is mid-migration and several majors are pinned on purpose
+  # (next 15 / react 19 / recharts 2 / framer-motion 11 / nuqs 2), so majors are
+  # held back and only minor/patch (security included) come through, grouped.
+  # pnpm-lock.yaml is the source of truth; Dependabot updates it in place.
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   # Dockerfile base image. pyproject requires-python is ">=3.11,<3.14", so only
   # patch bumps of the 3.11 line are wanted here (e.g. a new slim rebuild);
   # 3.12/3.13/3.14 bumps would break the build until the Dockerfile + pyproject

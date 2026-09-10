@@ -149,7 +149,7 @@ coverage/
 .trivycache/
 .trivy/
 
-# Frontend (Next.js / Vite) — Phase 4+
+# Frontend (Next.js) — Phase 4+
 node_modules/
 .next/
 out/
@@ -159,6 +159,13 @@ out/
 playwright-report/
 test-results/
 .lighthouseci/
+.lighthouseci
+# Generated at build time from dist/data/<sha>/ by frontend/scripts/{fetch,sync}-data.mjs.
+# Pinned per commit; produced by the precompute pipeline, never hand-edited.
+frontend/public/data/
+# These frontend files ARE tracked (do not add ignores for them):
+#   frontend/data.lock                          - the data-set pin
+#   frontend/src/lib/__fixtures__/ab_cases.json - A/B parity fixture, CI fails on drift
 
 # Cloud / deploy tooling local state — never commit credentials or provider caches
 .vercel/

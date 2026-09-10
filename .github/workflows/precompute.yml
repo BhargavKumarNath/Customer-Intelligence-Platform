@@ -1,0 +1,108 @@
+name: Precompute data
+
+# Canonical builder for the Phase 2 static artifact set (dist/data/<sha>/).
+# Path-filtered: it only runs when something that can change the numbers changes.
+# On main it also publishes the set to the durable store, keyed by sha, without
+# overwriting a prior sha's directory. The frontend pipeline consumes the same
+# set (same script, same --git-sha, byte-deterministic per tests/precompute).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/build_static_artifacts.py"
+      - "data/sample/**"
+      - "schemas/**"
+      - "requirements.lock"
+      - ".python-version"
+      - ".github/workflows/precompute.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/build_static_artifacts.py"
+      - "data/sample/**"
+      - "schemas/**"
+      - "requirements.lock"
+      - ".python-version"
+      - ".github/workflows/precompute.yml"
+
+concurrency:
+  group: precompute-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+          cache-dependency-path: requirements.lock
+
+      - name: Install (locked, hash-checked)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -e . --no-deps
+
+      - name: Build static artifacts
+        run: python scripts/build_static_artifacts.py --out dist/data --git-sha "${GITHUB_SHA}"
+
+      - name: Summarise the artifact set
+        run: |
+          SHA_DIR="dist/data/${GITHUB_SHA}"
+          ls -l "$SHA_DIR"
+          sha256sum "$SHA_DIR"/*.json
+
+      - name: Parity + determinism tests
+        run: pytest -q tests/precompute
+
+      - name: Upload artifact set
+        uses: actions/upload-artifact@v7
+        with:
+          name: static-data-${{ github.sha }}
+          path: dist/data/${{ github.sha }}/
+          retention-days: 14
+
+  # Publish dist/data/<sha>/ to Cloudflare R2 (S3 API), keyed by sha, no overwrite.
+  # Dormant until the owner sets the `DATA_STORE` repo variable to `r2` and adds
+  # the R2 secrets. GitHub Release assets are the documented fallback store.
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DATA_STORE == 'r2'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: static-data-${{ github.sha }}
+          path: set/
+
+      - name: Upload to R2 if this sha is not already published
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 rejects the trailing-checksum default of recent aws-cli v2; only
+          # send a checksum when the operation requires one.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          DEST="s3://${R2_BUCKET}/data/${GITHUB_SHA}/"
+          if aws s3 ls "$DEST" --endpoint-url "$R2_ENDPOINT" | grep -q .; then
+            echo "::notice::data/${GITHUB_SHA}/ already exists in R2 - immutable, not overwriting."
+            exit 0
+          fi
+          aws s3 cp set/ "$DEST" --recursive --endpoint-url "$R2_ENDPOINT" --no-progress
+          echo "::notice::Published $(ls set | wc -l) files to $DEST"
