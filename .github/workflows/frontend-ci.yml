@@ -89,13 +89,15 @@ jobs:
         run: |
           python scripts/gen_ab_fixture.py
           git diff --exit-code -- src/lib/__fixtures__/ab_cases.json
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
       - uses: actions/download-artifact@v7
         with:
           name: static-data-${{ github.sha }}
           path: dist/data/${{ github.sha }}/
+      - name: Sync pinned data set (pnpm test's fixtures read from public/data/current)
+        run: DATA_SHA="${GITHUB_SHA}" pnpm data
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
       - name: Build (static export)
         run: DATA_SHA="${GITHUB_SHA}" pnpm build
       - name: Assert the export is fully static
