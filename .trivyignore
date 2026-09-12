@@ -7,14 +7,6 @@
 # GHSA-6v7p-g79w-8964, CVE-2025-47273 and CVE-2026-24049 no longer have a
 # package to match. A local `trivy image` scan of the rebuilt image is clean.
 
-# ---------------------------------------------------------------------------
-# Legacy Streamlit manifest (requirements.txt) — retained one cycle
-# ---------------------------------------------------------------------------
-# CVE-2026-25087 — Apache Arrow C++ use-after-free DoS via malicious Arrow IPC
-# input. Dependabot has since bumped requirements.txt to pyarrow==25.0.1 and a
-# local `trivy fs` scan no longer flags it; this line is kept only until CI
-# confirms green, and is removed for good in deployment_stages.md Phase 9 when
-# requirements.txt is deleted. Not exploitable regardless: the Streamlit app
-# reads only its own trusted parquet, and requirements.txt is used by neither
-# CI, the API, nor the image.
-CVE-2026-25087
+# Phase 9 removed the legacy Streamlit manifest (requirements.txt) entirely,
+# so the CVE-2026-25087 (Apache Arrow) suppression that was scoped to it is
+# gone too — nothing left in the tree for it to match.

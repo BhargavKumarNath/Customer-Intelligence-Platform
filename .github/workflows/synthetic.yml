@@ -1,0 +1,61 @@
+name: Synthetic monitor
+
+# Phase 8 (deployment_stages.md): "know within minutes if the site is down,
+# slow, or serving stale/broken data". Runs the same KPI-rendering check that
+# gates every PR (tests/e2e/synthetic.spec.ts) against the live production
+# URL on a schedule, independently of the deploy pipeline. A failed run is the
+# alert: GitHub notifies the repo owner (and anyone watching Actions) by email
+# on the run turning red, so no extra alerting service is required.
+#
+# Dormant until the owner sets the PROD_URL repo variable (same pattern as the
+# frontend-ci.yml `smoke` job) — nothing to monitor before there's a deploy.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Override the URL to probe (defaults to the PROD_URL repo variable)"
+        required: false
+        type: string
+
+concurrency:
+  group: synthetic-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    if: vars.PROD_URL != '' || github.event.inputs.target_url != ''
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Probe the live site
+        env:
+          SYNTHETIC_BASE_URL: ${{ github.event.inputs.target_url || vars.PROD_URL }}
+        run: pnpm exec playwright test synthetic.spec.ts --project=desktop
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: synthetic-monitor-report
+          path: frontend/playwright-report/
+          retention-days: 7

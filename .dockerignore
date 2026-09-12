@@ -9,9 +9,6 @@ __pycache__
 .mypy_cache
 .ruff_cache
 
-app/__pycache__
-app/components/__pycache__
-
 notebooks/
 outputs/
 logs/
@@ -32,7 +29,6 @@ data/raw/
 data/db/
 data/processed/
 
-.streamlit/
 .devcontainer/
 config/
 

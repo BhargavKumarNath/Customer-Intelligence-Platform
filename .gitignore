@@ -178,4 +178,6 @@ gha-creds-*.json
 
 DEPLOYMENT_ARCHITECTURE_REVIEW.md
 deployment_stages.md
+RUNBOOK.md
+CLAUDE.md
 .gitignore

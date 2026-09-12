@@ -10,8 +10,9 @@ license = { text = "MIT" }
 # src/analysis/ab_testing.py). Kept lean on purpose: pyarrow, polars, and
 # scikit-learn are NOT imported by anything the API touches (the checked-in
 # LightGBM artifact is a raw `Booster`, not an sklearn wrapper) - they belong
-# to the offline pipeline scripts and the Streamlit dashboard, see the
-# `pipeline` and `dashboard` extras below.
+# to the offline pipeline scripts, see the `pipeline` extra below. The
+# Streamlit dashboard (`dashboard` extra) was retired in deployment_stages.md
+# Phase 9; the frontend is now the statically-exported Next.js app in `frontend/`.
 dependencies = [
     "duckdb>=1.0,<2.0",
     "pandas>=2.2,<3.0",
@@ -23,10 +24,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dashboard = [
-    "streamlit>=1.32,<2.0",
-    "plotly>=5.19,<6.0",
-]
 # Offline Hydra pipeline scripts (src/ingestion, src/processing, src/models/train_propensity.py,
 # summarise/, scripts/) - never installed in the API container.
 pipeline = [
@@ -89,7 +86,7 @@ ignore_missing_imports = true
 exclude = ["^src/(processing|ingestion)/.*legacy.*"]
 
 [[tool.mypy.overrides]]
-module = ["duckdb.*", "lightgbm.*", "hydra.*", "omegaconf.*", "streamlit.*", "plotly.*"]
+module = ["duckdb.*", "lightgbm.*", "hydra.*", "omegaconf.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

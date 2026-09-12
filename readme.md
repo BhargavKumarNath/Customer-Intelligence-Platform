@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-%E2%89%A51.0-yellow)](https://duckdb.org/)
 [![Polars](https://img.shields.io/badge/Polars-%E2%89%A51.0-orange)](https://www.pola.rs/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-red)](https://streamlit.io/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-teal)](https://fastapi.tiangolo.com/)
 
 > **An end-to-end analytics platform that processes the full 109.95M-row [eCommerce Behavior Data from a Multi-Category Store](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store) (Oct + Nov 2019) on a single machine, no cloud warehouse required. It surfaces high-value customer segments, scores purchase propensity, and quantifies revenue opportunities.**
@@ -13,15 +13,15 @@
 
 ---
 
-**Live Dashboard:** [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://customer-intelligence-platform.streamlit.app/)
+**Live Site:** the dashboard has migrated from Streamlit to a statically-exported Next.js site, served from Cloudflare Pages with data precomputed at build time (no backend on the request path). The production URL lands here once the Cloudflare Pages connection is wired up (an owner infra step — see `deployment_stages.md` Phases 6 and 9); the original Streamlit deployment is being decommissioned as part of that same migration.
 
 ## Project Overview
 
 The Customer Intelligence Platform takes raw behavioural event logs and turns them into something a business can actually act on. The main constraint I set for myself: everything had to run on a standard laptop, not a cloud cluster.
 
-That required careful data engineering - aggressive type-casting, dictionary encoding for high-cardinality strings, columnar storage, and a proper star-schema model sitting on top of DuckDB. The result is a Streamlit app with executive KPIs, RFM segmentation, a LightGBM purchase propensity model, and a statistical A/B test simulator, plus a FastAPI service that exposes the same segmentation, propensity, recommendation, and A/B testing logic as versioned REST endpoints for programmatic use.
+That required careful data engineering - aggressive type-casting, dictionary encoding for high-cardinality strings, columnar storage, and a proper star-schema model sitting on top of DuckDB. The result is a set of dashboards (executive KPIs, RFM segmentation, a LightGBM purchase propensity model, and a statistical A/B test simulator) built as a precomputed static site (`frontend/`, Next.js + DuckDB-WASM), plus a FastAPI service that exposes the same segmentation, propensity, recommendation, and A/B testing logic as versioned REST endpoints for programmatic use.
 
-Note that these two consumers are currently independent: the dashboard queries DuckDB directly rather than calling the API, so there's no runtime coupling between them today.
+Note that these two consumers are independent: the frontend reads precomputed JSON/Parquet artifacts (and runs ad-hoc SQL in-browser via DuckDB-WASM) rather than calling the API, so there's no runtime coupling between them today. See `deployment_stages.md` for the full migration record (Stack E: precomputed static site, off the FastAPI service).
 
 ## Problem Statement
 
@@ -79,7 +79,7 @@ Rather than loading purchase events into a Python graph library, association rul
     - `initial_modeling.py` + `sessionization.py` build the star schema: fact tables (`fact_sessions` — 23.0M rows, `fact_daily_kpis` — 61 days) referencing dimension tables (`dim_users` — 5.32M, `dim_products` — 206,876).
     - All DuckDB sessions are tuned by `src/utils/duckdb_env.py` (default `memory_limit=3GB`, `threads=2`, disk spill on; override with `CIP_DUCKDB_*` env vars on a bigger machine).
 - **Cloud/sample build** (`scripts/create_cloud_database.py` + `src/processing/dimensional_model.py`):
-    - The same star schema, built from the tracked stratified sample for the Streamlit Cloud deployment and the API image.
+    - The same star schema, built from the tracked stratified sample. `scripts/build_static_artifacts.py` consumes it to precompute the frontend's JSON/Parquet artifacts (`deployment_stages.md` Phase 2); the same sample also backs the API image and CI.
 
 ### 3. Feature Engineering & ML
 
@@ -95,7 +95,7 @@ Rather than loading purchase events into a Python graph library, association rul
 
 ## API Service
 
-Alongside the dashboard, `api/` (FastAPI) exposes the same analytics as versioned REST endpoints, backed by a read-only `DuckDBConnectionManager` (`src/db.py`) and a thin service layer (`src/services/`) that wraps the domain logic. There is no reimplementation of the segmentation/propensity/recommendation/A-B-test code.
+Alongside the static frontend, `api/` (FastAPI) exposes the same analytics as versioned REST endpoints, backed by a read-only `DuckDBConnectionManager` (`src/db.py`) and a thin service layer (`src/services/`) that wraps the domain logic. There is no reimplementation of the segmentation/propensity/recommendation/A-B-test code. Per `deployment_stages.md` (Stack E), the API is intentionally kept off the frontend's request path — it is a best-effort developer/demo service, deployed only if Phase 7 is picked up.
 
 | Method | Path | Description |
 |---|---|---|
@@ -120,7 +120,7 @@ uvicorn api.main:app --reload
 docker compose up --build
 ```
 
-CI (`.github/workflows/ci.yml`) lints, type-checks, and runs the full test suite (including `tests/api/`) on every push; CD (`.github/workflows/cd.yml`) builds and pushes the image to GHCR and can trigger a Render deploy hook once one is configured.
+CI (`.github/workflows/ci.yml`) lints, type-checks, and runs the full test suite (including `tests/api/`) on every push; CD (`.github/workflows/cd.yml`) builds and pushes the image to GHCR (no deploy target wired up — the API stays undeployed unless Phase 7 is picked up). The frontend has its own pipeline: `.github/workflows/precompute.yml` (data build + parity gate + publish) and `.github/workflows/frontend-ci.yml` (lint/typecheck/test/export/Playwright/Lighthouse/deploy).
 
 ---
 
@@ -167,9 +167,9 @@ Churn status across all 5.32M users (as of 2019-11-30): **Active 1.40M · At Ris
 | Star schema, RFM, retention, churn, feature store | ✅ `src/processing/` + `src/analysis/` on `data/db/behavior.duckdb` | ✅ `scripts/create_cloud_database.py` on `data/sample/` |
 | Market-basket affinity | ✅ 7,704 rules | ✅ 11 rules *(sample)* |
 | **Propensity model (`propensity_lgbm.pkl`, `metrics.json`)** | ✅ **checked-in model is the full-data one** (0.754 AUC, 4.6x lift) | — earlier revisions trained on the sample (0.72 AUC); superseded |
-| Streamlit dashboard | ✅ works in full/local mode when `data/db/behavior.duckdb` exists | ✅ default cloud mode (deployed app) |
+| Frontend (`frontend/`, static site) | — | ✅ built from precomputed artifacts (sample) |
 | API service (`api/`) + `tests/` | — | ✅ always runs on the sample DuckDB |
-| `scripts/build_static_artifacts.py` (deployment pre-compute) | — | ✅ sample only *(out of scope here)* |
+| `scripts/build_static_artifacts.py` (deployment pre-compute) | — | ✅ feeds the frontend's JSON/Parquet artifacts |
 
 Every "Results & Business Impact" number, the RFM table, the funnel rates, the recency
 gradient, and the propensity metrics are **full-dataset**. The A/B test outcome is
@@ -209,15 +209,18 @@ Result: the full pipeline completes with **peak RSS ≈ 3 GB** and no swap.
 customer-intelligence-platform/
 ├── api/                  # FastAPI service: routers, middleware, logging, exception handlers
 │   └── routers/          # health, segments, propensity, recommendations, experiments
-├── app/                  # Streamlit application (7 pages)
-│   ├── components/       # Shared UI components
-│   └── pages/            # Page logic: Data Explorer, ML Engine, etc.
+├── frontend/             # Next.js 15 static-export site (the live dashboard)
+│   ├── src/app/           # Routes: /, /executive, /user-intelligence, /ml-engine, /experiments, /data-explorer, /overview
+│   ├── src/components/    # Charts, panels, shell, design-system primitives
+│   ├── src/lib/           # Data loading, stats engine (A/B), DuckDB-WASM client
+│   └── scripts/           # Data-pin sync scripts + the A/B fixture generator
 ├── config/               # YAML configuration files
 ├── data/                 # Parquet files and DuckDB database (not checked in)
 ├── scripts/              # One-off build scripts
-│   ├── create_sample_dataset.py    # stratified sample from the full DuckDB
-│   ├── create_cloud_database.py    # sample -> sample.duckdb (star schema)
-│   └── finalize_full_db.py         # dashboard-compat views on the full DuckDB
+│   ├── create_sample_dataset.py       # stratified sample from the full DuckDB
+│   ├── create_cloud_database.py       # sample -> sample.duckdb (star schema)
+│   ├── finalize_full_db.py            # legacy dashboard-compat views on the full DuckDB
+│   └── build_static_artifacts.py      # sample.duckdb -> the frontend's JSON/Parquet artifacts
 ├── src/                  # Core analytics, ML, and API-service modules
 │   ├── analysis/         # RFM, cohort retention, A/B testing
 │   ├── domain/           # Pydantic request/response models for the API
@@ -232,8 +235,7 @@ customer-intelligence-platform/
 ├── tests/                # Unit, API, and quality-gate tests
 ├── Dockerfile            # Builds and serves the FastAPI service (port 8000)
 ├── docker-compose.yml    # Local API container with healthcheck
-├── requirements.txt      # Pinned deps for the Streamlit Cloud dashboard
-├── pyproject.toml        # Package + optional-dependency groups (api, dashboard, pipeline, dev)
+├── pyproject.toml        # Package + optional-dependency groups (api, pipeline, dev)
 └── readme.md             # This file
 ```
 
@@ -241,7 +243,7 @@ customer-intelligence-platform/
 
 ## Installation & Setup
 
-You can run against a small representative sample (fast, works on Streamlit Cloud) or rebuild the full pipeline from the raw 109.95M-row dataset. The steps below set up the **dashboard**; for the **API service**, see [API Service](#api-service) above and install with `pip install -e ".[api]"` instead of `requirements.txt`.
+You can run against a small representative sample (fast, no download) or rebuild the full pipeline from the raw 109.95M-row dataset. The steps below set up the **data pipeline**; for the **frontend**, see [Running the Frontend](#3-running-the-frontend) below, and for the **API service**, see [API Service](#api-service) above and install with `pip install -e ".[api]"`.
 
 ### 1. Environment Setup
 
@@ -251,10 +253,8 @@ cd Customer-Intelligence-Platform
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-# Dashboard-only (Streamlit Cloud pins):
-pip install -r requirements.txt
 # Full local pipeline (ingestion + processing + training):
-pip install -e ".[pipeline,dashboard]"
+pip install -e ".[pipeline,dev]"
 ```
 
 ### 2. Data Pipeline
@@ -308,10 +308,15 @@ None of these are in Git; all are reproducible from the Kaggle source.
 | `data/db/behavior.duckdb` | ~5.4 GB | `src/ingestion/loader.py` + `src/processing/` + `src/analysis/` |
 | `src/models/propensity_lgbm.pkl`, `metrics.json` | ~3.4 MB | `src/models/train_propensity.py` (checked in) |
 
-### 3. Running the Dashboard
+### 3. Running the Frontend
+
+The dashboard is a statically-exported Next.js site under `frontend/`, built on the precomputed artifacts from `scripts/build_static_artifacts.py` (not on a live DuckDB connection):
 
 ```bash
-streamlit run app/Home.py
+cd frontend
+pnpm install
+pnpm dev      # http://localhost:3000, pulls/pins the data set via scripts/sync-data.mjs
+# or: pnpm build && pnpm start   # production static build
 ```
 
 ---
@@ -320,10 +325,10 @@ streamlit run app/Home.py
 
 - **Data engineering**: [DuckDB](https://duckdb.org/) (in-process OLAP SQL), [Polars](https://pola.rs/) (Rust-based DataFrame library), [Apache Parquet](https://arrow.apache.org/) (columnar storage)
 - **Machine learning**: [LightGBM](https://lightgbm.readthedocs.io/), scikit-learn
-- **Dashboard**: [Streamlit](https://streamlit.io/), [Plotly](https://plotly.com/)
+- **Frontend**: [Next.js](https://nextjs.org/) 15 (App Router, static export), Tailwind, Radix primitives, Recharts, [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview) for in-browser ad-hoc SQL
 - **API service**: [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn, `slowapi` (rate limiting), `structlog` (structured logging), Pydantic v2
-- **Deployment**: Docker, GitHub Actions (CI: lint/type-check/test; CD: build + push to GHCR, optional Render deploy hook)
-- **Architecture**: Star schema dimensional model, config-driven pipeline
+- **Deployment**: Docker + GHCR (API image, undeployed by default); Cloudflare Pages + GitHub Actions (frontend: precompute → build → test → deploy)
+- **Architecture**: Star schema dimensional model, config-driven pipeline, precompute-then-serve static frontend (see `deployment_stages.md`)
 
 ---
 
@@ -332,7 +337,7 @@ streamlit run app/Home.py
 1. **Causal inference**: The current A/B simulation assumes correlation implies causation. Integrating `DoWhy` or `EconML` would let you estimate true incrementality from the intervention.
 2. **Graph-based recommendations**: The SQL approach works well for pairwise affinities, but moving to `Neo4j` would unlock multi-hop relationships (PageRank, Node2Vec embeddings).
 3. **Streaming ingestion**: Single-user scoring is already available in real time via the FastAPI service, but the underlying pipeline is still batch-only. Connecting Kafka to DuckDB for intra-day event streaming would keep segments and propensity scores fresh without a full pipeline rerun.
-4. **Wiring the dashboard to the API**: The Streamlit app and the FastAPI service still query DuckDB independently rather than the dashboard calling the API. Their star-schema/RFM/retention SQL is now consolidated into one shared module (`src/processing/dimensional_model.py`), which removed the duplication one level down, but the two services themselves remain decoupled. Fully wiring the dashboard to the API would remove what's left.
+4. **Wiring the frontend to the API**: the static frontend reads precomputed artifacts rather than calling the FastAPI service at request time (by design — see `deployment_stages.md`, Stack E), so the two remain decoupled. Their star-schema/RFM/retention SQL is consolidated into one shared module (`src/processing/dimensional_model.py`), but a live frontend-to-API integration (beyond the optional, off-the-critical-path Developer API page) is not planned.
 5. **API auth**: The service currently has no authentication layer, so it's suitable for internal/demo use but not for a public deployment as-is.
 
 ---

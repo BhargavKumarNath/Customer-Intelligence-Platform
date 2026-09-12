@@ -1,6 +1,8 @@
 """Enforces the Stack E load-bearing invariant: the migration-critical core
 (``src/`` service + processing layer and ``api/``) must not depend on Streamlit
-or Plotly. Only ``app/`` may import them.
+or Plotly. The Streamlit dashboard (``app/``) that used to be the one exception
+was retired in deployment_stages.md Phase 9; this guard now simply prevents
+either package from ever being reintroduced into the core tree.
 
 Why this matters: Phase 2's precompute job and the FastAPI image both install
 ``.[api,dev]`` only - neither ``streamlit`` nor ``plotly`` is present. A lazy
@@ -79,7 +81,7 @@ def test_core_import_does_not_pull_in_streamlit_or_plotly() -> None:
 
 def test_no_streamlit_or_plotly_import_statements_in_core_tree() -> None:
     """Static guard: no ``import streamlit`` / ``import plotly`` anywhere under
-    ``src/`` or ``api/`` (visualisation code belongs in ``app/``)."""
+    ``src/`` or ``api/`` (neither package is a dependency of this project anymore)."""
     offenders: list[str] = []
     for base in ("src", "api"):
         for path in sorted((PROJECT_ROOT / base).rglob("*.py")):

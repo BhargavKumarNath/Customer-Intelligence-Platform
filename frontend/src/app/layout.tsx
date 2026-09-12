@@ -3,6 +3,7 @@ import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/app-shell";
+import { ErrorTracking, WebAnalytics } from "@/components/observability";
 import { getManifest, getMeta } from "@/lib/data";
 
 const display = Fraunces({
@@ -61,8 +62,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <WebAnalytics />
       </head>
       <body className="min-h-screen font-sans antialiased">
+        <ErrorTracking release={meta.git_sha} />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:panel focus:px-3 focus:py-2 focus:text-sm"
