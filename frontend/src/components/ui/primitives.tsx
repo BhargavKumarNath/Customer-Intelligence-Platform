@@ -210,17 +210,22 @@ export function Callout({
   title,
   children,
   action,
+  level = 3,
 }: {
   tone?: "finding" | "positive" | "caution" | "critical";
   label?: string;
   title: ReactNode;
   children: ReactNode;
   action?: ReactNode;
+  /** Heading level for `title`. Default (3) assumes a Section's h2 precedes
+   * this Callout; pass 2 when it appears before the page's first Section. */
+  level?: 2 | 3;
 }) {
+  const Heading = level === 2 ? "h2" : "h3";
   return (
     <div className={cn("panel border-l-2 p-5", TONE_RING[tone])}>
       {label && <span className="kicker">{label}</span>}
-      <h3 className="mt-1.5 font-display text-lg leading-snug text-ink">{title}</h3>
+      <Heading className="mt-1.5 font-display text-lg leading-snug text-ink">{title}</Heading>
       <div className="mt-2 text-sm leading-relaxed text-ink-muted">{children}</div>
       {action && <div className="mt-3">{action}</div>}
     </div>

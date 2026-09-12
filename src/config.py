@@ -2,9 +2,9 @@
 
 This is intentionally separate from the Hydra configs under `config/` (those
 drive the offline `src/ingestion`, `src/processing`, `src/models` pipeline
-scripts and `app/db_utils.py`, which are left untouched). This module governs
-only the new FastAPI service, which always ships and reads the same
-precomputed sample artifacts that are baked into the Docker image.
+scripts, which are left untouched). This module governs only the FastAPI
+service, which always ships and reads the same precomputed sample artifacts
+that are baked into the Docker image.
 """
 
 from __future__ import annotations

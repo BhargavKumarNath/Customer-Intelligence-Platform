@@ -63,16 +63,16 @@ Fraunces for display, Inter for UI, JetBrains Mono for figures. Motion is
 
 ## Deploy
 
-`output: 'export'` produces `out/`. Ship it to Cloudflare Pages. `public/_headers`
-carries the CSP (it allows `cdn.jsdelivr.net` for the DuckDB-WASM runtime, which is
-loaded from there because its wasm modules exceed the 25 MiB per-file limit on
-Pages), HSTS, and the cache rules: HTML gets a short shared TTL with
-`stale-while-revalidate`, hashed assets and `/data/current/*` are `immutable`.
+`output: 'export'` produces `out/`. Ship it to Vercel. `public/vercel.json`
+carries the CSP (it allows `cdn.jsdelivr.net` for the DuckDB-WASM runtime,
+loaded from there rather than self-hosted), HSTS, and the cache rules: HTML gets
+a short shared TTL with `stale-while-revalidate`, hashed assets and
+`/data/current/*` are `immutable`.
 
 `.github/workflows/frontend-ci.yml` builds and tests `out/`, then (once the owner
-sets the `CLOUDFLARE_PAGES_PROJECT` repo variable plus `CLOUDFLARE_API_TOKEN` /
-`CLOUDFLARE_ACCOUNT_ID` secrets) deploys a preview per PR and production on `main`,
-followed by a post-deploy smoke against `PROD_URL`. The Pages Git integration is
-the alternative: leave the variable unset and the CI deploy jobs stay skipped.
+sets the `VERCEL_PROJECT_ID` repo variable plus `VERCEL_TOKEN` / `VERCEL_ORG_ID`
+secrets) deploys a preview per PR and production on `main` via the `vercel` CLI,
+followed by a post-deploy smoke against `PROD_URL`. Vercel's own Git integration
+is the alternative: leave the variable unset and the CI deploy jobs stay skipped.
 Data is published by `.github/workflows/precompute.yml`. See `deployment_stages.md`
 Phases 4, 5, and 6.

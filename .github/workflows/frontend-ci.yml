@@ -101,7 +101,7 @@ jobs:
       - name: Assert the export is fully static
         run: |
           test ! -d out/_next/server
-          test -f out/_headers
+          test -f out/vercel.json
           test -f out/data/current/meta.json
       - name: Assert the build consumed this commit's data set
         run: |
@@ -142,19 +142,20 @@ jobs:
         run: pnpm dlx @lhci/cli@0.14.x autorun
 
   # ---------------------------------------------------------------------------
-  # Deploy to Cloudflare Pages. Dormant until the owner sets the
-  # `CLOUDFLARE_PAGES_PROJECT` repo variable and adds CLOUDFLARE_API_TOKEN +
-  # CLOUDFLARE_ACCOUNT_ID secrets. If the owner instead connects the repo via
-  # the Pages Git integration, leave the variable unset and these stay skipped.
+  # Deploy to Vercel. Dormant until the owner sets the `VERCEL_PROJECT_ID` repo
+  # variable and adds VERCEL_TOKEN + VERCEL_ORG_ID secrets. If the owner instead
+  # connects the repo via Vercel's own Git integration, leave the variable
+  # unset and these stay skipped (pick one, not both — see deployment_stages.md
+  # Phase 6).
   # ---------------------------------------------------------------------------
   deploy-preview:
     runs-on: ubuntu-latest
     needs: check
-    # Same-repo PRs only: fork PRs cannot read the Cloudflare secrets.
+    # Same-repo PRs only: fork PRs cannot read the Vercel secrets.
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && vars.CLOUDFLARE_PAGES_PROJECT != ''
+      && vars.VERCEL_PROJECT_ID != ''
     permissions:
       contents: read
       deployments: write
@@ -165,24 +166,20 @@ jobs:
           path: out/
       - name: Publish preview
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-          PR_BRANCH: ${{ github.head_ref }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         working-directory: .
         run: |
           set -euo pipefail
-          pnpm dlx wrangler@3 pages deploy out \
-            --project-name="$CF_PROJECT" \
-            --branch="$PR_BRANCH" \
-            --commit-hash="$GITHUB_SHA" | tee deploy.log
-          URL=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | head -1 || true)
+          URL=$(pnpm dlx vercel@latest deploy ./out --token="$VERCEL_TOKEN" --yes 2>deploy.log | tail -1)
+          cat deploy.log
           echo "Preview: ${URL:-see log}" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-production:
     runs-on: ubuntu-latest
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_PAGES_PROJECT != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.VERCEL_PROJECT_ID != ''
     permissions:
       contents: read
       deployments: write
@@ -196,22 +193,19 @@ jobs:
       - name: Publish production
         id: deploy
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         working-directory: .
         run: |
           set -euo pipefail
-          pnpm dlx wrangler@3 pages deploy out \
-            --project-name="$CF_PROJECT" \
-            --branch=main \
-            --commit-hash="$GITHUB_SHA" | tee deploy.log
-          URL=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | head -1 || true)
+          URL=$(pnpm dlx vercel@latest deploy ./out --token="$VERCEL_TOKEN" --prod --yes 2>deploy.log | tail -1)
+          cat deploy.log
           echo "url=${URL:-}" >> "$GITHUB_OUTPUT"
           echo "Production: ${URL:-see log}" >> "$GITHUB_STEP_SUMMARY"
 
   # Post-deploy smoke against the live production URL. Uses the PROD_URL repo
-  # variable (the custom domain or the *.pages.dev URL).
+  # variable (the custom domain or the *.vercel.app URL).
   smoke:
     runs-on: ubuntu-latest
     needs: deploy-production

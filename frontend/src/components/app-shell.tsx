@@ -155,7 +155,7 @@ function BuildStamp({ build }: { build: BuildInfo }) {
 
 function TopBar({ onMenu }: { onMenu: () => void }) {
   return (
-    <div className="sticky top-0 z-30 flex items-center justify-between border-b border-rule bg-paper/85 px-4 py-3 backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-rule bg-paper/85 px-4 py-3 backdrop-blur lg:hidden">
       <button
         type="button"
         onClick={onMenu}
@@ -166,7 +166,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       </button>
       <Wordmark />
       <ThemeToggle compact />
-    </div>
+    </header>
   );
 }
 

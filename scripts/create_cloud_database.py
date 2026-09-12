@@ -69,8 +69,8 @@ def build_cloud_database():
         event_count = con.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         logger.info(f"Loaded {event_count:,} events")
         
-        # Step 2: Build the star schema + ML prediction tables (shared builder,
-        # also used by app/db_utils.py's cloud-mode path, so both stay in sync)
+        # Step 2: Build the star schema + ML prediction tables (shared builder;
+        # scripts/build_static_artifacts.py consumes the same tables)
         logger.info("Creating dimensional model...")
         build_all(con, logger=logger)
 

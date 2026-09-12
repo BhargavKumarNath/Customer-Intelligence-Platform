@@ -12,6 +12,7 @@ FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41
 # runs during the image build (no LightGBM), but the builder stage doubles as the
 # Phase 2 reproducible-precompute env, which does score the propensity model.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,7 +40,13 @@ FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41
 
 # libgomp1: LightGBM's compiled extension dynamically loads libgomp.so.1 (GNU OpenMP)
 # at import time, which python:3.11-slim doesn't ship by default.
+#
+# apt-get upgrade: pulls Debian's own security-repo point-release patches for
+# base-OS packages (gzip/perl/libpcre2/libsqlite3, etc.) that land upstream
+# faster than a fresh python:3.11-slim digest gets published. Keeps the image
+# digest-pinned (reproducible base layer) while not shipping stale OS CVEs.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 

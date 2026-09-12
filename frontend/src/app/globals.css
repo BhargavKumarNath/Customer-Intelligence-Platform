@@ -12,14 +12,20 @@
   --surface-sunken: 40 22% 92%;
   --ink: 30 9% 12%;
   --ink-muted: 34 7% 38%;
-  --ink-faint: 34 8% 55%;
+  /* 41% (not the original 55%): WCAG AA needs >=4.5:1 for the small text this
+     token is used on (kickers, meta spans, table sub-labels); 55% measured
+     ~2.95:1 against --paper (axe color-contrast violations on every route). */
+  --ink-faint: 34 8% 41%;
   --rule: 38 18% 84%;
   --rule-strong: 34 14% 71%;
   --accent: 18 74% 39%;
   --accent-soft: 20 66% 93%;
   --accent-ink: 18 80% 30%;
   --positive: 145 30% 30%;
-  --caution: 36 62% 38%;
+  /* 34% (not the original 38%): the 38% value measured ~3.8:1 against
+     --surface-sunken (the Tag/table hover background), under WCAG AA's 4.5:1
+     for normal text. */
+  --caution: 36 62% 34%;
   --critical: 8 58% 43%;
 
   --series-1: 18 72% 45%;
@@ -39,7 +45,7 @@
   --surface-sunken: 36 10% 8%;
   --ink: 38 24% 90%;
   --ink-muted: 36 10% 62%;
-  --ink-faint: 36 9% 46%;
+  --ink-faint: 36 9% 50%;
   --rule: 36 9% 19%;
   --rule-strong: 34 9% 30%;
   --accent: 20 82% 56%;

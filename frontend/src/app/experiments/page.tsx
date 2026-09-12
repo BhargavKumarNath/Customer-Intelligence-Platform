@@ -44,6 +44,7 @@ export default function ExperimentsPage() {
       <Callout
         tone="finding"
         label="The question"
+        level={2}
         title={
           atRisk
             ? `Would a reactivation offer move the ${integer(atRisk.population)} At Risk buyers?`

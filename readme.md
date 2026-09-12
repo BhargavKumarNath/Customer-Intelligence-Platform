@@ -13,7 +13,7 @@
 
 ---
 
-**Live Site:** the dashboard has migrated from Streamlit to a statically-exported Next.js site, served from Cloudflare Pages with data precomputed at build time (no backend on the request path). The production URL lands here once the Cloudflare Pages connection is wired up (an owner infra step — see `deployment_stages.md` Phases 6 and 9); the original Streamlit deployment is being decommissioned as part of that same migration.
+**Live Site:** the dashboard has migrated from Streamlit to a statically-exported Next.js site, served from Vercel with data precomputed at build time (no backend on the request path). The production URL lands here once the Vercel connection is wired up (an owner infra step — see `deployment_stages.md` Phases 6 and 9); the original Streamlit deployment is being decommissioned as part of that same migration.
 
 ## Project Overview
 
@@ -327,7 +327,7 @@ pnpm dev      # http://localhost:3000, pulls/pins the data set via scripts/sync-
 - **Machine learning**: [LightGBM](https://lightgbm.readthedocs.io/), scikit-learn
 - **Frontend**: [Next.js](https://nextjs.org/) 15 (App Router, static export), Tailwind, Radix primitives, Recharts, [DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview) for in-browser ad-hoc SQL
 - **API service**: [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn, `slowapi` (rate limiting), `structlog` (structured logging), Pydantic v2
-- **Deployment**: Docker + GHCR (API image, undeployed by default); Cloudflare Pages + GitHub Actions (frontend: precompute → build → test → deploy)
+- **Deployment**: Docker + GHCR (API image, undeployed by default); Vercel + GitHub Actions (frontend: precompute → build → test → deploy)
 - **Architecture**: Star schema dimensional model, config-driven pipeline, precompute-then-serve static frontend (see `deployment_stages.md`)
 
 ---

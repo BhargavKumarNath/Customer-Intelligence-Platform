@@ -5,14 +5,11 @@ Dimensional model builder for the full-scale, Hydra-driven local pipeline
 
 This intentionally does NOT share `src/processing/dimensional_model.py`.
 That module is the shared builder for the sample/cloud path
-(`scripts/create_cloud_database.py` and `app/db_utils.py`'s cloud mode).
-The two builders still differ (this one adds `dim_users.is_buyer`,
-`favorite_category_by_recency`, and a richer `fact_sessions` via
-`sessionization.py`; the RFM/retention tables here are named `analysis_*`),
-but the overlapping columns are now kept name-compatible so the dashboard can
-read either DB. `scripts/finalize_full_db.py` adds the `user_rfm_segments` /
-`weekly_retention` compatibility views the dashboard's full/local mode needs
-on top of the `analysis_*` tables.
+(`scripts/create_cloud_database.py`). The two builders still differ (this
+one adds `dim_users.is_buyer`, `favorite_category_by_recency`, and a richer
+`fact_sessions` via `sessionization.py`; the RFM/retention tables here are
+named `analysis_*`), but the overlapping columns are kept name-compatible
+by convention.
 """
 
 import duckdb
@@ -63,10 +60,9 @@ def create_dimensional_models(cfg: DictConfig):
 
         # 2. CREATE FACT_DAILY_KPIS
         # Column names kept identical to src/processing/dimensional_model.py's
-        # fact_daily_kpis (daily_events / views / carts / purchases) so the
-        # Streamlit dashboard's full/local mode (app/db_utils.py reads this DB
-        # directly) and its cloud/sample mode (which uses dimensional_model)
-        # query the same schema. They used to diverge (total_events / total_*).
+        # fact_daily_kpis (daily_events / views / carts / purchases) so both
+        # builders' outputs share one schema. They used to diverge
+        # (total_events / total_*).
         logger.info(" Creating 'fact_daily_kpis'...")
         query_daily = """
         CREATE OR REPLACE TABLE fact_daily_kpis AS

@@ -47,6 +47,7 @@ export function Slider({
           <RSlider.Range className="absolute h-full rounded-full bg-accent" />
         </RSlider.Track>
         <RSlider.Thumb
+          aria-label={label}
           className="block h-4 w-4 rounded-full border border-accent bg-surface shadow-sm outline-none transition-transform focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface data-[state=active]:scale-110"
         />
       </RSlider.Root>
