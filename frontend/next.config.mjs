@@ -52,15 +52,6 @@ const nextConfig = {
   reactStrictMode: true,
   trailingSlash: true,
   images: { unoptimized: true },
-  // Vercel sets VERCEL_ENV automatically on every build running on its platform
-  // (production/preview/development) but doesn't expose it to client code unless
-  // re-declared here as a NEXT_PUBLIC_* var. observability.tsx uses it to only
-  // render <Analytics/> when actually built on Vercel: the component injects a
-  // <script src="/_vercel/insights/script.js"> unconditionally, which 404s (a
-  // console error) anywhere that path isn't served by Vercel's platform —
-  // local dev, and CI, which serves the static export itself rather than a
-  // real Vercel deployment.
-  env: { NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? "" },
 };
 
 // `headers()` is inert under `output: export`; the real headers ship via
