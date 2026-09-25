@@ -6,7 +6,7 @@
 # Refresh both lines together with:
 #   docker buildx imagetools inspect python:3.11-slim   # -> Digest: sha256:...
 
-FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS builder
+FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS builder
 
 # libgomp1: LightGBM loads libgomp.so.1 at import. Only create_cloud_database.py
 # runs during the image build (no LightGBM), but the builder stage doubles as the
@@ -36,7 +36,7 @@ COPY scripts/build_static_artifacts.py ./scripts/build_static_artifacts.py
 COPY data/sample/sample_optimized.parquet ./data/sample/sample_optimized.parquet
 RUN python scripts/create_cloud_database.py
 
-FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 AS runtime
+FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS runtime
 
 # libgomp1: LightGBM's compiled extension dynamically loads libgomp.so.1 (GNU OpenMP)
 # at import time, which python:3.11-slim doesn't ship by default.
