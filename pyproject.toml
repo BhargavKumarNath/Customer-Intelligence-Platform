@@ -14,7 +14,7 @@ license = { text = "MIT" }
 # Streamlit dashboard (`dashboard` extra) was retired in deployment_stages.md
 # Phase 9; the frontend is now the statically-exported Next.js app in `frontend/`.
 dependencies = [
-    "duckdb>=1.0,<2.0",
+    "duckdb>=1.0,<3.0",
     "pandas>=2.2,<3.0",
     "lightgbm>=4.3,<5.0",
     "scipy>=1.12",
