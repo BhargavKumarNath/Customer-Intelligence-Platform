@@ -24,7 +24,8 @@ _QUERY = f"""
 
 
 class SegmentationService:
-    """Looks up precomputed RFM segments (see src/analysis/segmentation.py for how the
+    """Looks up precomputed RFM segments (see build_user_rfm_segments in
+    src/processing/dimensional_model.py for how the
     `user_rfm_segments` table is built)."""
 
     def __init__(self, connections: DuckDBConnectionManager) -> None:

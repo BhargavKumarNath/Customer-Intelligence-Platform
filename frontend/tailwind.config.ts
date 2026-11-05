@@ -34,6 +34,8 @@ const config: Config = {
         "series-4": withVar("series-4"),
         "series-5": withVar("series-5"),
         "series-6": withVar("series-6"),
+        "series-7": withVar("series-7"),
+        "series-8": withVar("series-8"),
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],

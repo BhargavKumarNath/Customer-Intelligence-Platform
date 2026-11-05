@@ -52,11 +52,11 @@ show("revenue", con.execute("""
 
 # ---- RFM segments (buyers only) ----
 show("analysis_rfm_segments", con.execute("""
-  SELECT segment_name, COUNT(*) users,
+  SELECT segment, COUNT(*) users,
          ROUND(100.0*COUNT(*)/SUM(COUNT(*)) OVER(),1) pct_buyers,
-         ROUND(AVG(monetary_value),2) avg_spend,
+         ROUND(AVG(monetary),2) avg_spend,
          ROUND(AVG(recency_days),1) avg_recency,
-         ROUND(AVG(frequency_count),1) avg_freq
+         ROUND(AVG(frequency),1) avg_freq
   FROM analysis_rfm_segments GROUP BY 1 ORDER BY 3 DESC
 """).fetchdf())
 
@@ -66,13 +66,13 @@ show("analysis_churn_risk", con.execute("SELECT status, COUNT(*) n FROM analysis
 # ---- at-risk VIPs: top-decile buyers by spend, showing churn signal ----
 show("at-risk VIPs (top spend decile)", con.execute("""
   WITH b AS (
-    SELECT r.user_id, r.monetary_value, c.status,
-           NTILE(10) OVER (ORDER BY r.monetary_value) AS spend_decile
+    SELECT r.user_id, r.monetary, c.status,
+           NTILE(10) OVER (ORDER BY r.monetary) AS spend_decile
     FROM analysis_rfm_segments r JOIN analysis_churn_risk c USING(user_id)
   )
   SELECT spend_decile,
          COUNT(*) users,
-         ROUND(AVG(monetary_value),2) avg_spend,
+         ROUND(AVG(monetary),2) avg_spend,
          SUM(CASE WHEN status IN ('At Risk','Churned') THEN 1 ELSE 0 END) at_risk_or_churned,
          SUM(CASE WHEN status = 'At Risk' THEN 1 ELSE 0 END) at_risk,
          SUM(CASE WHEN status = 'Churned' THEN 1 ELSE 0 END) churned

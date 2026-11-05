@@ -15,6 +15,8 @@ const TOKENS = [
   "series-4",
   "series-5",
   "series-6",
+  "series-7",
+  "series-8",
   "accent",
   "positive",
   "caution",
@@ -36,6 +38,8 @@ const FALLBACK: Record<Token, string> = {
   "series-4": "hsl(348 30% 47%)",
   "series-5": "hsl(112 20% 40%)",
   "series-6": "hsl(232 26% 50%)",
+  "series-7": "hsl(282 26% 48%)",
+  "series-8": "hsl(30 6% 52%)",
   accent: "hsl(18 72% 40%)",
   positive: "hsl(145 30% 32%)",
   caution: "hsl(36 60% 40%)",
@@ -63,7 +67,16 @@ function readColors(): ChartColors {
   return { ...out, series: SERIES_KEYS.map((k) => out[k]) };
 }
 
-const SERIES_KEYS: Token[] = ["series-1", "series-2", "series-3", "series-4", "series-5", "series-6"];
+const SERIES_KEYS: Token[] = [
+  "series-1",
+  "series-2",
+  "series-3",
+  "series-4",
+  "series-5",
+  "series-6",
+  "series-7",
+  "series-8",
+];
 
 export function useChartColors(): ChartColors {
   const [colors, setColors] = useState<ChartColors>(() => readColors());
@@ -80,19 +93,4 @@ export function useChartColors(): ChartColors {
     };
   }, []);
   return colors;
-}
-
-/** Stable colour for a named RFM segment, independent of array order. */
-const SEGMENT_ORDER = [
-  "Champions",
-  "Loyal Customers",
-  "Promising",
-  "Regular",
-  "At Risk",
-  "Lost",
-];
-
-export function segmentColorIndex(segment: string): number {
-  const i = SEGMENT_ORDER.indexOf(segment);
-  return i === -1 ? 5 : i;
 }

@@ -15,6 +15,7 @@ import { RfmScatter } from "@/components/user-intel/rfm-scatter";
 import { SegmentPopulationBars } from "@/components/user-intel/segment-bars";
 import { UserLookup } from "@/components/user-intel/user-lookup";
 import { currency, integer, percent, percentPoints } from "@/lib/format";
+import { REACTIVATION_SEGMENT, segmentColorIndex } from "@/lib/segments";
 
 export const metadata: Metadata = {
   title: "User intelligence",
@@ -28,13 +29,13 @@ export default function UserIntelligencePage() {
   const retention = getRetention();
   const week1 = getWeekOneRetention();
   const buyers = rfm.reduce((a, s) => a + s.population, 0);
-  const atRisk = rfm.find((s) => s.segment === "At Risk");
+  const lapsed = rfm.find((s) => s.segment === REACTIVATION_SEGMENT);
   const champions = rfm.find((s) => s.segment === "Champions");
 
-  const popBars = rfm.map((s, i) => ({
+  const popBars = rfm.map((s) => ({
     label: s.segment,
     value: s.population,
-    colorIndex: i,
+    colorIndex: segmentColorIndex(s.segment),
     meta: `${percentPoints(s.pct_of_buyers)} of buyers`,
   }));
 
@@ -46,7 +47,7 @@ export default function UserIntelligencePage() {
         title="User intelligence"
         lede={
           <>
-            Buyers split into six behavioral segments by recency and frequency. The retention grid
+            Buyers split into {rfm.length} behavioral segments by recency and frequency. The retention grid
             then shows how quickly first-time visitors fall away, which is the real constraint on
             growth here.
           </>
@@ -75,9 +76,9 @@ export default function UserIntelligencePage() {
           </FigureCell>
           <FigureCell>
             <Figure
-              label="At Risk value"
-              value={atRisk ? currency(atRisk.total_monetary) : "n/a"}
-              sub={atRisk ? `${integer(atRisk.population)} buyers` : undefined}
+              label={`${REACTIVATION_SEGMENT} value`}
+              value={lapsed ? currency(lapsed.total_monetary) : "n/a"}
+              sub={lapsed ? `${integer(lapsed.population)} buyers` : undefined}
             />
           </FigureCell>
           <FigureCell>

@@ -4,6 +4,7 @@ import { PageHeader, Panel, Section, Callout } from "@/components/ui/primitives"
 import { AbCalculator } from "@/components/experiments/ab-calculator";
 import { GridExplorer } from "@/components/experiments/grid-explorer";
 import { currency, integer } from "@/lib/format";
+import { REACTIVATION_SEGMENT } from "@/lib/segments";
 
 export const metadata: Metadata = {
   title: "Experiment lab",
@@ -16,8 +17,8 @@ export default function ExperimentsPage() {
   const rfm = getRfmSummary();
   const segments = Array.from(new Set(grid.map((c) => c.segment))).sort();
 
-  const atRisk = rfm.find((s) => s.segment === "At Risk");
-  const defaultSize = atRisk ? Math.min(12000, Math.max(1000, Math.round(atRisk.population / 2 / 250) * 250)) : 2500;
+  const lapsed = rfm.find((s) => s.segment === REACTIVATION_SEGMENT);
+  const defaultSize = lapsed ? Math.min(12000, Math.max(250, Math.round(lapsed.population / 2 / 250) * 250)) : 2500;
 
   return (
     <div className="space-y-14">
@@ -36,7 +37,7 @@ export default function ExperimentsPage() {
           <>
             <span>{grid.length} precomputed cells</span>
             <span>{segments.length} segments</span>
-            {atRisk && <span>At Risk holds {currency(atRisk.total_monetary)}</span>}
+            {lapsed && <span>{REACTIVATION_SEGMENT} holds {currency(lapsed.total_monetary)}</span>}
           </>
         }
       />
@@ -46,9 +47,9 @@ export default function ExperimentsPage() {
         label="The question"
         level={2}
         title={
-          atRisk
-            ? `Would a reactivation offer move the ${integer(atRisk.population)} At Risk buyers?`
-            : "Would a reactivation offer move the At Risk buyers?"
+          lapsed
+            ? `Would a reactivation offer move the ${integer(lapsed.population)} ${REACTIVATION_SEGMENT} buyers?`
+            : `Would a reactivation offer move the ${REACTIVATION_SEGMENT} buyers?`
         }
       >
         These buyers used to purchase often and have gone quiet. A coupon might bring them back, or it

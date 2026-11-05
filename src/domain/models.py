@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class UserSegment(BaseModel):
     user_id: int
     recency_days: int = Field(description="Days since the user's most recent purchase")
-    frequency: int = Field(description="Number of distinct days with a purchase")
+    frequency: int = Field(description="Number of purchase events")
     monetary: float = Field(description="Total historical spend")
     r_score: int = Field(ge=1, le=5)
     f_score: int = Field(ge=1, le=5)

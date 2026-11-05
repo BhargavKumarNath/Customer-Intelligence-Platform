@@ -6,8 +6,8 @@ import { fetchSegments } from "@/lib/client-data";
 import { GroupedScatter, type ScatterPoint } from "@/components/charts/scatter";
 import { ChartSkeleton, ErrorState } from "@/components/ui/states";
 import { currency, integer } from "@/lib/format";
+import { SEGMENT_ORDER } from "@/lib/segments";
 
-const SEGMENT_ORDER = ["Champions", "Loyal Customers", "Promising", "Regular", "At Risk", "Lost"];
 const SAMPLE_TARGET = 2600;
 
 export function RfmScatter() {

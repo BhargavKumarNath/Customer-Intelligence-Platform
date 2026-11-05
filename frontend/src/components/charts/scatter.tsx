@@ -44,7 +44,7 @@ export function GroupedScatter({
   const colors = useChartColors();
   const byGroup = groups.map((g, i) => ({
     group: g,
-    color: colors.series[i % 6] ?? colors["series-1"],
+    color: colors.series[i % colors.series.length] ?? colors["series-1"],
     data: points.filter((p) => p.group === g),
   }));
 

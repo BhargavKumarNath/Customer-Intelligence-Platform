@@ -104,9 +104,9 @@ def build_feature_store(cfg: DictConfig):
             
             -- RFM Features (Coalesce Nulls for Non-Buyers)
             COALESCE(r.recency_days, -1) as recency_days,
-            COALESCE(r.frequency_count, 0) as frequency_raw,
-            COALESCE(r.monetary_value, 0) as monetary_raw,
-            COALESCE(r.segment_name, 'Browser') as rfm_segment,
+            COALESCE(r.frequency, 0) as frequency_raw,
+            COALESCE(r.monetary, 0) as monetary_raw,
+            COALESCE(r.segment, 'Browser') as rfm_segment,
             COALESCE(r.rfm_code, '000') as rfm_code,
             
             -- Behavioral Features

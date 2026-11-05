@@ -76,7 +76,7 @@ export function HorizontalBars({
                 fill={
                   accentAll
                     ? colors.accent
-                    : colors.series[d.colorIndex ?? i % 6] ?? colors["series-1"]
+                    : colors.series[d.colorIndex ?? i % colors.series.length] ?? colors["series-1"]
                 }
               />
             ))}

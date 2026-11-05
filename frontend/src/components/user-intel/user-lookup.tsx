@@ -6,6 +6,7 @@ import { fetchPropensity, fetchSegments } from "@/lib/client-data";
 import { LoadingBlock, ErrorState, EmptyState } from "@/components/ui/states";
 import { currency, integer, percent } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { REACTIVATION_SEGMENT } from "@/lib/segments";
 
 export function UserLookup() {
   const [armed, setArmed] = useState(false);
@@ -29,7 +30,7 @@ export function UserLookup() {
     if (!segments.data || !propensity.data) return [];
     const values = Object.values(segments.data);
     const champion = values.find((u) => u.segment === "Champions");
-    const atRisk = values.find((u) => u.segment === "At Risk");
+    const lapsed = values.find((u) => u.segment === REACTIVATION_SEGMENT);
     let topId = "";
     let topScore = -1;
     for (const [id, score] of Object.entries(propensity.data)) {
@@ -40,7 +41,7 @@ export function UserLookup() {
     }
     return [
       champion && { id: String(champion.user_id), label: "a Champion" },
-      atRisk && { id: String(atRisk.user_id), label: "an At Risk buyer" },
+      lapsed && { id: String(lapsed.user_id), label: `a ${REACTIVATION_SEGMENT} buyer` },
       topId && { id: topId, label: "the highest propensity" },
     ].filter(Boolean) as { id: string; label: string }[];
   }, [segments.data, propensity.data]);

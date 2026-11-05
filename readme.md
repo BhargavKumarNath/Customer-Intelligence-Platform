@@ -66,6 +66,8 @@ All figures below are computed from the full dataset: 109,950,743 events, 5,316,
 
 ### RFM segments (buyers only, recency measured against the dataset's last date)
 
+One rule (`build_user_rfm_segments` in `src/processing/dimensional_model.py`) produces these segments for the full-data pipeline, the sample database, the API and the live site. Each of recency, frequency (purchase events) and spend is scored 1 to 5 with `NTILE(5)`, and the segment comes from the recency and frequency scores. The live site shows the same 8 segments computed on the sample.
+
 | Segment | Users | % of buyers | Avg spend | Avg recency (days) |
 |---|--:|--:|--:|--:|
 | Loyal Customers | 148,165 | 21.2% | $668 | 15 |
@@ -79,7 +81,7 @@ All figures below are computed from the full dataset: 109,950,743 events, 5,316,
 
 Churn status across all 5.32M users, as of 2019-11-30: 1.40M active, 1.03M at risk, 2.88M churned (most of that last bucket is users who only ever appeared briefly in October).
 
-The A/B test on the live site is **illustrative**, not a measured result: it runs a seeded synthetic experiment (assumed 12% base rate, +15% treatment effect) against the real 36,754-user "Cant Lose Them" population to exercise the statistics engine. The population is real; the outcome is simulated.
+The A/B test is **illustrative**, not a measured result: it runs a seeded synthetic experiment (assumed 12% base rate plus the chosen treatment lift) against a real segment population to exercise the statistics engine. The population is real; the outcome is simulated. On the full data the pipeline's target is the 36,754-user "Cant Lose Them" segment. The live site is built from the 1.65M-row sample, where the same segment has 578 buyers, and its calculator covers all 8 segments.
 
 ## Project structure
 

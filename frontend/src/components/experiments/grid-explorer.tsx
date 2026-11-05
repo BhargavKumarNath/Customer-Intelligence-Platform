@@ -6,9 +6,10 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { SegmentedControl } from "@/components/ui/controls";
 import { Tag } from "@/components/ui/primitives";
 import { percent, pValueLabel } from "@/lib/format";
+import { defaultSegment } from "@/lib/segments";
 
 export function GridExplorer({ grid, segments }: { grid: AbGridCell[]; segments: string[] }) {
-  const [segment, setSegment] = useState(segments[0] ?? "At Risk");
+  const [segment, setSegment] = useState(defaultSegment(segments));
   const rows = useMemo(
     () => grid.filter((c) => c.segment === segment).sort((a, b) => a.lift - b.lift || a.confidence_level - b.confidence_level),
     [grid, segment],

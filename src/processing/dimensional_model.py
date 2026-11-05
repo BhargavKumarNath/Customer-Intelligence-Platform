@@ -105,8 +105,30 @@ def build_fact_daily_kpis(con: duckdb.DuckDBPyConnection) -> int:
     return _count(con, "fact_daily_kpis")
 
 
-def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
-    """RFM segmentation, recency anchored to the dataset's own max event date.
+# One RFM rule for every build: the full-data pipeline (src/analysis/segmentation.py),
+# the tracked sample database, the API and the static dashboard all call this, so a
+# segment name means the same thing everywhere.
+RFM_SEGMENTS = (
+    "Champions",
+    "Loyal Customers",
+    "New Customers",
+    "Promising",
+    "Need Attention",
+    "Cant Lose Them",
+    "Hibernating",
+    "At Risk",
+)
+
+
+def build_user_rfm_segments(
+    con: duckdb.DuckDBPyConnection, table: str = "user_rfm_segments"
+) -> int:
+    """RFM segmentation of buyers, recency anchored to the dataset's own max event time.
+
+    recency_days  days from the user's last purchase to MAX(event_time) over all events
+    frequency     number of purchase events
+    monetary      total purchase spend
+    Each is bucketed into 1-5 with NTILE(5); recency is inverted so recent buyers score 5.
 
     Anchoring to CURRENT_DATE would make recency_days (and therefore every
     R-score and every segment label) drift upward by one every day the
@@ -114,16 +136,20 @@ def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
     captured. Anchoring to MAX(event_time) makes the segmentation a pure
     function of the dataset, reproducible on any day it's run.
     """
-    con.execute("""
-        CREATE OR REPLACE TABLE user_rfm_segments AS
-        WITH reference_date AS (
-            SELECT MAX(CAST(event_time AS DATE)) as max_date FROM events
-        ),
-        buyer_rfm AS (
+    if not table.isidentifier():
+        raise ValueError(f"invalid table name: {table!r}")
+    row = con.execute("SELECT MAX(event_time) FROM events").fetchone()
+    if row is None or row[0] is None:
+        raise ValueError("events table is empty")
+    max_ts = row[0]
+    con.execute(
+        f"""
+        CREATE OR REPLACE TABLE {table} AS
+        WITH buyer_rfm AS (
             SELECT
                 user_id,
-                DATE_DIFF('day', MAX(CAST(event_time AS DATE)), (SELECT max_date FROM reference_date)) as recency_days,
-                COUNT(DISTINCT CAST(event_time AS DATE)) as frequency,
+                DATE_DIFF('day', MAX(event_time), CAST(? AS TIMESTAMP)) as recency_days,
+                COUNT(*) as frequency,
                 SUM(price) as monetary
             FROM events
             WHERE event_type = 'purchase'
@@ -140,9 +166,9 @@ def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
                 -- value can land in different NTILE buckets on different runs
                 -- (DuckDB doesn't guarantee stable ordering for ties), so
                 -- segment counts would silently shift between rebuilds.
-                NTILE(5) OVER (ORDER BY recency_days DESC, user_id) as r_score,
-                NTILE(5) OVER (ORDER BY frequency ASC, user_id) as f_score,
-                NTILE(5) OVER (ORDER BY monetary ASC, user_id) as m_score
+                6 - NTILE(5) OVER (ORDER BY recency_days, user_id) as r_score,
+                NTILE(5) OVER (ORDER BY frequency, user_id) as f_score,
+                NTILE(5) OVER (ORDER BY monetary, user_id) as m_score
             FROM buyer_rfm
         )
         SELECT
@@ -154,17 +180,22 @@ def build_user_rfm_segments(con: duckdb.DuckDBPyConnection) -> int:
             f_score,
             m_score,
             r_score + f_score + m_score as rfm_total,
+            CAST(r_score AS VARCHAR) || CAST(f_score AS VARCHAR) || CAST(m_score AS VARCHAR) as rfm_code,
             CASE
                 WHEN r_score >= 4 AND f_score >= 4 THEN 'Champions'
                 WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal Customers'
-                WHEN r_score >= 4 AND f_score <= 2 THEN 'Promising'
-                WHEN r_score <= 2 AND f_score >= 3 THEN 'At Risk'
-                WHEN r_score <= 2 AND f_score <= 2 THEN 'Lost'
-                ELSE 'Regular'
+                WHEN r_score >= 4 AND f_score = 1 THEN 'New Customers'
+                WHEN r_score >= 3 AND f_score = 1 THEN 'Promising'
+                WHEN r_score = 2 AND f_score >= 2 THEN 'Need Attention'
+                WHEN r_score = 1 AND f_score >= 4 THEN 'Cant Lose Them'
+                WHEN r_score = 1 AND f_score <= 2 THEN 'Hibernating'
+                ELSE 'At Risk'
             END as segment
         FROM rfm_scores
-    """)
-    return _count(con, "user_rfm_segments")
+        """,
+        [max_ts],
+    )
+    return _count(con, table)
 
 
 def build_product_affinity(

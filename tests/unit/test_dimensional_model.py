@@ -13,7 +13,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from src.processing.dimensional_model import build_all
+from src.processing.dimensional_model import RFM_SEGMENTS, build_all, build_user_rfm_segments
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SAMPLE_PARQUET = PROJECT_ROOT / "data" / "sample" / "sample_optimized.parquet"
@@ -96,3 +96,36 @@ def test_rfm_segmentation_is_deterministic_across_rebuilds():
         "RFM segment counts differ between two builds of identical input data, "
         "the NTILE window functions are missing a deterministic tiebreaker"
     )
+
+
+def test_rfm_uses_the_one_eight_segment_taxonomy(built_connection):
+    """The sample build, the API and the dashboard must use the same segment
+    names as the full-data pipeline (src/analysis/segmentation.py). They once
+    used a separate 6-segment rule, so the live dashboard and the README
+    described different segments."""
+    labels = {
+        row[0]
+        for row in built_connection.execute(
+            "SELECT DISTINCT segment FROM user_rfm_segments"
+        ).fetchall()
+    }
+    assert labels == set(RFM_SEGMENTS)
+
+
+def test_rfm_builder_writes_the_requested_table(built_connection):
+    """segmentation.py builds analysis_rfm_segments through the same function."""
+    n = build_user_rfm_segments(built_connection, table="analysis_rfm_segments")
+    same = built_connection.execute(
+        """
+        SELECT COUNT(*) FROM user_rfm_segments u
+        JOIN analysis_rfm_segments a USING (user_id)
+        WHERE u.segment = a.segment AND u.rfm_code = a.rfm_code
+        """
+    ).fetchone()[0]
+    assert n == same > 0
+    built_connection.execute("DROP TABLE analysis_rfm_segments")
+
+
+def test_rfm_builder_rejects_unsafe_table_names(built_connection):
+    with pytest.raises(ValueError):
+        build_user_rfm_segments(built_connection, table="x; DROP TABLE events")

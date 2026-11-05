@@ -13,6 +13,7 @@ import { Reveal } from "@/components/ui/reveal";
 import { ActionLink } from "@/components/ui/action-link";
 import { Headline } from "@/components/home/headline";
 import { NAV } from "@/lib/nav";
+import { REACTIVATION_SEGMENT } from "@/lib/segments";
 import { currency, integer, multiple, percent, percentPoints } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export default function HomePage() {
   const rfm = getRfmSummary();
   const week1 = getWeekOneRetention();
 
-  const atRisk = rfm.find((s) => s.segment === "At Risk");
+  const lapsed = rfm.find((s) => s.segment === REACTIVATION_SEGMENT);
   const champions = rfm.find((s) => s.segment === "Champions");
   const buyers = rfm.reduce((a, s) => a + s.population, 0);
   const modelLift = metrics.lift_top5pct;
@@ -96,17 +97,17 @@ export default function HomePage() {
               tone="caution"
               label="Finding 02 · Lapsed value"
               title={
-                atRisk
-                  ? `${currency(atRisk.total_monetary)} sits with buyers who have gone quiet`
+                lapsed
+                  ? `${currency(lapsed.total_monetary)} sits with buyers who have gone quiet`
                   : "A high-value segment has gone quiet"
               }
               action={<ActionLink href="/experiments">Design the reactivation test</ActionLink>}
             >
-              {atRisk ? (
+              {lapsed ? (
                 <>
-                  The <em>At Risk</em> segment is {integer(atRisk.population)} buyers who used to
-                  purchase often and now average {Math.round(atRisk.avg_recency_days)} days since
-                  their last order. Their lifetime spend is {currency(atRisk.total_monetary)}. That is
+                  The <em>{REACTIVATION_SEGMENT}</em> segment is {integer(lapsed.population)} buyers who used to
+                  purchase often and now average {Math.round(lapsed.avg_recency_days)} days since
+                  their last order. Their lifetime spend is {currency(lapsed.total_monetary)}. That is
                   the population to run a reactivation experiment against.
                 </>
               ) : (

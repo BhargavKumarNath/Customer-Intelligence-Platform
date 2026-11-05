@@ -9,7 +9,7 @@
           "type": "integer"
         },
         "frequency": {
-          "description": "Number of distinct days with a purchase",
+          "description": "Number of purchase events",
           "title": "Frequency",
           "type": "integer"
         },

@@ -7,6 +7,7 @@ import { Slider, Select } from "@/components/ui/controls";
 import { Panel, Callout, Tag } from "@/components/ui/primitives";
 import { DensityPair } from "@/components/charts/distribution";
 import { integer, percent, pValueLabel } from "@/lib/format";
+import { defaultSegment } from "@/lib/segments";
 
 const GRID_LIFTS = [0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0, 2.0, 5.0];
 const CONFIDENCE_OPTIONS = [
@@ -33,7 +34,7 @@ export function AbCalculator({
   grid: AbGridCell[];
   defaultSampleSize: number;
 }) {
-  const [segment, setSegment] = useState(segments[0] ?? "At Risk");
+  const [segment, setSegment] = useState(defaultSegment(segments));
   const [sampleSize, setSampleSize] = useState(defaultSampleSize);
   const [baseline, setBaseline] = useState(0.12);
   const [lift, setLift] = useState(0.15);
