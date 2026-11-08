@@ -6,13 +6,13 @@ import time
 import sys
 
 from src.utils.duckdb_env import apply_pragmas
+from src.models.propensity_data import load_training_frame, split_train_test
 import json
 import subprocess
 from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, precision_score, recall_score, confusion_matrix
 import pickle
 
@@ -40,54 +40,9 @@ def train_propensity_model(cfg: DictConfig):
         
         logger.info("   Constructing Training Set (Features: Oct, Target: Nov)...")
         
-        query_train = """
-        WITH oct_behavior AS (
-            SELECT 
-                user_id,
-                COUNT(*) as oct_events,
-                COUNT(DISTINCT user_session) as oct_sessions,
-                SUM(CASE WHEN event_type='view' THEN 1 ELSE 0 END) as oct_views,
-                SUM(CASE WHEN event_type='cart' THEN 1 ELSE 0 END) as oct_carts,
-                SUM(CASE WHEN event_type='remove_from_cart' THEN 1 ELSE 0 END) as oct_removes,
-                MAX(event_time) as last_oct_event,
-                date_diff('day', MIN(event_time), MAX(event_time)) as active_span_days
-            FROM events
-            WHERE event_time < '2019-11-01'
-            GROUP BY user_id
-        ),
-        nov_outcome AS (
-            SELECT 
-                user_id,
-                1 as converted_in_nov
-            FROM events
-            WHERE event_time >= '2019-11-01' AND event_type = 'purchase'
-            GROUP BY user_id
-        )
-        SELECT 
-            t.user_id,
-            t.oct_events,
-            t.oct_sessions,
-            t.oct_views,
-            t.oct_carts,
-            t.oct_removes,
-            t.active_span_days,
-            -- Recency relative to Oct 31
-            date_diff('day', t.last_oct_event, DATE '2019-11-01') as recency_oct,
-            -- Target Variable (0 or 1)
-            COALESCE(n.converted_in_nov, 0) as target
-        FROM oct_behavior t
-        LEFT JOIN nov_outcome n ON t.user_id = n.user_id
-        ORDER BY t.user_id;
-        """
-        # ORDER BY above matters: without it, DuckDB doesn't guarantee row
-        # order across runs (especially with multi-threaded execution), so
-        # even a seeded train_test_split(random_state=42) would shuffle a
-        # different underlying row order each run and silently produce a
-        # different actual train/test split every time this script runs.
-        
         # Load into Pandas (Should be manageable ~3M rows active in Oct)
         start = time.time()
-        df = con.execute(query_train).fetchdf()
+        df = load_training_frame(con)
         logger.info(f"Training data loaded: {len(df):,} rows in {time.time() - start:.2f}s")
         
         # Check Class Imbalance
@@ -97,10 +52,7 @@ def train_propensity_model(cfg: DictConfig):
 
         # 2. TRAIN / TEST SPLIT
         X = df.drop(columns=['user_id', 'target'])
-        y = df['target']
-        
-        # Stratified split to maintain conversion rate in test set
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        X_train, X_test, y_train, y_test = split_train_test(df)
         
         # 3. TRAIN LIGHTGBM
         logger.info("   Training LightGBM Classifier...")

@@ -46,6 +46,16 @@ The standard failure mode in behavioral modeling is a random train/test split th
 - Trained on 2,417,832 users, evaluated on 604,458 (an 80/20 stratified split of the 3,022,290 users active in October)
 - Top 5% of scored users convert at **36.9%**, against an **8.0%** November baseline, a **4.6x lift**
 
+**Compared to what.** `src/models/evaluate_baselines.py` scores the same 604,458 test users with two cheaper rankers and puts 95% bootstrap intervals (1,000 paired resamples, seed 42) on everything. It refuses to run unless the LightGBM AUC it measures matches `metrics.json`, so all three rows below are on the identical test set. Results are in `src/models/baselines.json`.
+
+| Ranker | ROC-AUC (95% CI) | Top-5% lift (95% CI) |
+|---|---|---|
+| LightGBM (checked-in model) | 0.7541 (0.7518 to 0.7566) | 4.60x (4.54 to 4.66) |
+| Logistic regression, same 7 features (log1p, standardized) | 0.7419 (0.7395 to 0.7444) | 4.10x (4.04 to 4.16) |
+| Recency rule: rank by days since last October event | 0.6393 (0.6368 to 0.6418) | 2.10x (2.06 to 2.14) |
+
+LightGBM's edge is real but modest: +0.012 AUC (0.0116 to 0.0130) and +0.50x lift (0.45 to 0.54) over logistic regression. Most of the 4.6x comes from the October behaviour features themselves, which a linear model already uses well. Recency alone gets less than half of it. The top-5% rates here split tied scores fairly (the recency rule has huge tie groups); the 4.6x headline uses `score >= 95th percentile` and the script reproduces it as-is.
+
 ### A/B testing and market basket analysis
 
 `src/analysis/ab_testing.py` runs Welch's t-test (valid under unequal variances between cohorts), a delta-method confidence interval on the conversion lift, and a post-hoc power check. The frontend's Experiment Lab page runs a TypeScript port of the same statistics live in the browser, checked against a precomputed grid of 216 cases for parity.
@@ -58,7 +68,7 @@ All figures below are computed from the full dataset: 109,950,743 events, 5,316,
 
 | Finding | Numbers | Read on it |
 |---|---|---|
-| High-intent users are identifiable | Top 5% of ML-scored users convert at 4.6x the baseline (36.9% vs 8.0%), 0.7541 ROC-AUC | Target campaigns at this cohort instead of the full user base |
+| High-intent users are identifiable | Top 5% of ML-scored users convert at 4.6x the baseline (36.9% vs 8.0%), 0.7541 ROC-AUC; logistic regression on the same features gets 4.1x, a recency rule 2.1x | Target campaigns at this cohort instead of the full user base; a linear model gets most of the way there |
 | A specific at-risk group stands out | "Cant Lose Them" RFM segment: 36,754 users, ~$956 average historical spend, ~50 days since last purchase, high past purchase frequency | Small enough for a personalized reactivation effort, valuable enough to justify one |
 | Product affinities exist but are concentrated | 7,704 directed pair rules from 1.66M purchase events; the strongest by volume are smartphone accessory pairs | "Frequently bought together" has real signal for high-traffic electronics, but most of the 206K-product catalog has too few co-purchases to mine |
 | Recency is the dominant signal | November purchase rate by days since last October activity: 16.8% at 1 day, 10.2% at 4 to 7 days, 4.9% at 15 to 30 days | A user seen yesterday is about 3.5x more likely to buy than one last seen two to four weeks ago |
@@ -150,6 +160,7 @@ python src/processing/features.py           # user-level feature store
 python src/analysis/retention.py            # weekly retention, churn risk
 python src/models/recommendations.py        # product affinity rules
 python src/models/train_propensity.py       # propensity_lgbm.txt + metrics.json
+python -m src.models.evaluate_baselines    # baselines.json: LightGBM vs logistic vs recency, bootstrap CIs
 ```
 
 On a 10 GB-RAM, 8-core Linux box, this runs end to end in around 15 minutes with peak memory under 3 GB. Raise `CIP_DUCKDB_MEMORY_LIMIT` / `CIP_DUCKDB_THREADS` on a bigger machine.

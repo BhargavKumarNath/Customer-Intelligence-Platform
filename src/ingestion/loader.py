@@ -23,7 +23,9 @@ def ingest_data(cfg: DictConfig):
 
     logger.info(f" Connecting to DuckDB at {db_path}...")
     
-    # Connect to DuckDB (Persistent Disk-Based)
+    # Connect to DuckDB (Persistent Disk-Based). data/db/ is not in Git, so
+    # create it on a fresh checkout instead of failing on the first run.
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     con = duckdb.connect(db_path)
     
     try:
