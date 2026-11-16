@@ -191,6 +191,9 @@ jobs:
           push: false
           load: true
           tags: cip-api:ci
+          # Bust only the runtime-stage `apt-get upgrade` layer so cached builds
+          # still pick up freshly published Debian security fixes.
+          build-args: APT_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -45,7 +45,14 @@ FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41
 # base-OS packages (gzip/perl/libpcre2/libsqlite3, etc.) that land upstream
 # faster than a fresh python:3.11-slim digest gets published. Keeps the image
 # digest-pinned (reproducible base layer) while not shipping stale OS CVEs.
-RUN apt-get update \
+#
+# APT_REFRESH exists only to bust the build cache for this layer. Without it the
+# CI `cache-from: type=gha` replays a stale `apt-get upgrade` layer (the RUN text
+# never changes), so a fixed Debian package (e.g. zlib1g) is never picked up and
+# Trivy fails the image scan. CI passes the run id; local builds can ignore it.
+ARG APT_REFRESH=0
+RUN echo "apt refresh: ${APT_REFRESH}" \
+    && apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
